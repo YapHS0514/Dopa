@@ -1,13 +1,18 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Callable
 import os
 from dotenv import load_dotenv
 from supabase import create_client, Client
 import httpx
 from datetime import datetime
+from enum import Enum
+from fastapi import Request
+from collections import defaultdict
+import time
+from fastapi.responses import JSONResponse
 
 # Load environment variables
 load_dotenv()
@@ -37,6 +42,105 @@ supabase_admin: Client = create_client(supabase_url, supabase_service_key) if su
 # Security
 security = HTTPBearer()
 
+class UserRole(str, Enum):
+    USER = "user"
+    ADMIN = "admin"
+
+class User(BaseModel):
+    id: str
+    email: str
+    role: UserRole = UserRole.USER
+    metadata: Dict[str, Any] = {}
+
+# Enhanced user dependency with role checking
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> User:
+    try:
+        # Verify the JWT token with Supabase
+        user = supabase.auth.get_user(credentials.credentials)
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid authentication token")
+        
+        # Get user role from metadata
+        role = user.user.user_metadata.get("role", UserRole.USER)
+        return User(
+            id=user.user.id,
+            email=user.user.email,
+            role=role,
+            metadata=user.user.user_metadata
+        )
+    except Exception as e:
+        raise HTTPException(status_code=401, detail="Invalid authentication token")
+
+def require_role(required_role: UserRole) -> Callable:
+    async def role_checker(user: User = Depends(get_current_user)) -> User:
+        if user.role != required_role:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Operation requires {required_role} role"
+            )
+        return user
+    return role_checker
+
+# Rate limiting
+from fastapi import Request
+from collections import defaultdict
+
+# Simple in-memory rate limiting
+class RateLimiter:
+    def __init__(self, rate_limit: int = 100, time_window: int = 60):
+        self.rate_limit = rate_limit
+        self.time_window = time_window
+        self.requests: Dict[str, list] = defaultdict(list)
+    
+    def is_rate_limited(self, client_id: str) -> bool:
+        now = time.time()
+        # Remove old requests
+        self.requests[client_id] = [req_time for req_time in self.requests[client_id] 
+                                  if now - req_time < self.time_window]
+        
+        # Check if rate limit is exceeded
+        if len(self.requests[client_id]) >= self.rate_limit:
+            return True
+        
+        # Add new request
+        self.requests[client_id].append(now)
+        return False
+
+rate_limiter = RateLimiter(rate_limit=100, time_window=60)
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    client_id = request.client.host if request.client else "unknown"
+    
+    if rate_limiter.is_rate_limited(client_id):
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Too many requests. Please try again later."}
+        )
+    
+    return await call_next(request)
+
+# Request logging
+import logging
+from fastapi import Request
+import time
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    duration = time.time() - start_time
+    
+    logger.info(
+        f"Method: {request.method} Path: {request.url.path} "
+        f"Status: {response.status_code} Duration: {duration:.2f}s"
+    )
+    
+    return response
+
 # Pydantic models
 class UserInteractionRequest(BaseModel):
     content_id: str
@@ -55,17 +159,6 @@ class ContentRequest(BaseModel):
 class TopicPreferenceUpdate(BaseModel):
     topic_id: str
     points: int
-
-# Dependency to get current user
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    try:
-        # Verify the JWT token with Supabase
-        user = supabase.auth.get_user(credentials.credentials)
-        if not user:
-            raise HTTPException(status_code=401, detail="Invalid authentication token")
-        return user.user
-    except Exception as e:
-        raise HTTPException(status_code=401, detail="Invalid authentication token")
 
 @app.get("/")
 async def root():
@@ -112,11 +205,19 @@ async def get_contents(
 @app.post("/api/contents")
 async def create_content(
     content: ContentRequest,
-    user=Depends(get_current_user)
+    user: User = Depends(require_role(UserRole.ADMIN))
 ):
     """Create new content (admin only)"""
     try:
-        response = supabase.table("contents").insert({
+        # Validate content data
+        if not content.title or not content.summary:
+            raise HTTPException(status_code=400, detail="Title and summary are required")
+        
+        if content.difficulty_level not in range(1, 6):
+            raise HTTPException(status_code=400, detail="Difficulty level must be between 1 and 5")
+        
+        # Create content using admin client to bypass RLS
+        response = supabase_admin.table("contents").insert({
             "title": content.title,
             "summary": content.summary,
             "content_type": content.content_type,
@@ -124,11 +225,19 @@ async def create_content(
             "tags": content.tags,
             "difficulty_level": content.difficulty_level,
             "estimated_read_time": content.estimated_read_time,
-            "ai_generated": True
+            "ai_generated": True,
+            "created_by": user.id
         }).execute()
         
-        return {"data": response.data[0], "message": "Content created successfully"}
+        if not response.data:
+            raise HTTPException(status_code=500, detail="Failed to create content")
+        
+        return {
+            "data": response.data[0],
+            "message": "Content created successfully"
+        }
     except Exception as e:
+        logger.error(f"Error creating content: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # User interaction endpoints

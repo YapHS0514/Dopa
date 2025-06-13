@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Session, User } from '@supabase/supabase-js';
 
-interface AuthContextType {
+export interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
@@ -11,7 +11,9 @@ interface AuthContextType {
   signOut: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(
+  undefined
+);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -50,12 +52,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
           full_name: fullName,
+          role: 'user', // Set default role
         },
       },
     });
@@ -64,20 +67,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw error;
     }
 
-    // Create profile after successful signup
-    if (!error) {
+    // Create profile after successful signup using admin client
+    if (data.user) {
       const { error: profileError } = await supabase
         .from('profiles')
         .insert([
           {
-            user_id: (await supabase.auth.getUser()).data.user?.id,
+            user_id: data.user.id,
             email,
             full_name: fullName,
           },
-        ]);
+        ])
+        .select()
+        .single();
 
       if (profileError) {
         console.error('Error creating profile:', profileError);
+        throw profileError;
       }
     }
   };

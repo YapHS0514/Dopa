@@ -21,12 +21,48 @@ interface Topic {
 }
 
 const SAMPLE_TOPICS: Topic[] = [
-  { id: '1', name: 'Technology', description: 'Latest tech trends', color: '#3B82F6', icon: 'phone-portrait-outline' },
-  { id: '2', name: 'Science', description: 'Scientific discoveries', color: '#10B981', icon: 'flask-outline' },
-  { id: '3', name: 'History', description: 'Historical events', color: '#F59E0B', icon: 'library-outline' },
-  { id: '4', name: 'Sports', description: 'Sports and fitness', color: '#EF4444', icon: 'trophy-outline' },
-  { id: '5', name: 'Health', description: 'Wellness and health', color: '#EC4899', icon: 'heart-outline' },
-  { id: '6', name: 'Business', description: 'Business insights', color: '#6366F1', icon: 'briefcase-outline' },
+  {
+    id: '1',
+    name: 'Technology',
+    description: 'Latest tech trends',
+    color: '#3B82F6',
+    icon: 'phone-portrait-outline',
+  },
+  {
+    id: '2',
+    name: 'Science',
+    description: 'Scientific discoveries',
+    color: '#10B981',
+    icon: 'flask-outline',
+  },
+  {
+    id: '3',
+    name: 'History',
+    description: 'Historical events',
+    color: '#F59E0B',
+    icon: 'library-outline',
+  },
+  {
+    id: '4',
+    name: 'Sports',
+    description: 'Sports and fitness',
+    color: '#EF4444',
+    icon: 'trophy-outline',
+  },
+  {
+    id: '5',
+    name: 'Health',
+    description: 'Wellness and health',
+    color: '#EC4899',
+    icon: 'heart-outline',
+  },
+  {
+    id: '6',
+    name: 'Business',
+    description: 'Business insights',
+    color: '#6366F1',
+    icon: 'briefcase-outline',
+  },
 ];
 
 export default function OnboardingScreen() {
@@ -51,7 +87,7 @@ export default function OnboardingScreen() {
 
     setLoading(true);
     try {
-      const preferences = Array.from(selectedTopics).map(topicId => ({
+      const preferences = Array.from(selectedTopics).map((topicId) => ({
         topic_id: topicId,
         points: 50, // Initial preference points
       }));
@@ -59,7 +95,10 @@ export default function OnboardingScreen() {
       await apiClient.updateUserPreferences(preferences);
       router.replace('/(tabs)');
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to save preferences. Please try again.');
+      Alert.alert(
+        'Error',
+        error.detail || 'Failed to save preferences. Please try again.'
+      );
       console.error('Onboarding error:', error);
     } finally {
       setLoading(false);
@@ -67,15 +106,13 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={['#667eea', '#764ba2']}
-      style={styles.container}
-    >
+    <LinearGradient colors={['#667eea', '#764ba2']} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <Text style={styles.title}>Choose Your Interests</Text>
           <Text style={styles.subtitle}>
-            Select topics you'd like to learn about to personalize your experience
+            Select topics you'd like to learn about to personalize your
+            experience
           </Text>
         </View>
 
@@ -89,7 +126,9 @@ export default function OnboardingScreen() {
               ]}
               onPress={() => toggleTopic(topic.id)}
             >
-              <View style={[styles.topicIcon, { backgroundColor: topic.color }]}>
+              <View
+                style={[styles.topicIcon, { backgroundColor: topic.color }]}
+              >
                 <Ionicons name={topic.icon as any} size={24} color="white" />
               </View>
               <View style={styles.topicInfo}>
@@ -109,7 +148,9 @@ export default function OnboardingScreen() {
           disabled={loading || selectedTopics.size === 0}
         >
           <Text style={styles.buttonText}>
-            {loading ? 'Setting up...' : `Continue (${selectedTopics.size} selected)`}
+            {loading
+              ? 'Setting up...'
+              : `Continue (${selectedTopics.size} selected)`}
           </Text>
         </TouchableOpacity>
 

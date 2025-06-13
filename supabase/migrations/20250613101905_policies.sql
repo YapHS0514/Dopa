@@ -1,26 +1,3 @@
-/*
-  # Initial Database Schema for Microlearning App
-
-  1. New Tables
-    - `profiles` - User profiles with preferences and points
-    - `topics` - Available learning topics/categories
-    - `contents` - Learning content/reels
-    - `user_interactions` - Track user swipes and interactions
-    - `user_topic_preferences` - User preferences for topics
-    - `saved_contents` - User saved content collection
-
-  2. Security
-    - Enable RLS on all tables
-    - Add policies for authenticated users to manage their own data
-    - Public read access for topics and contents
-
-  3. Features
-    - Points system for recommendation algorithm
-    - Topic preference tracking
-    - Content interaction history
-    - User authentication via Supabase Auth
-*/
-
 -- Create topics table first (referenced by other tables)
 CREATE TABLE IF NOT EXISTS topics (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -104,20 +81,34 @@ ALTER TABLE user_interactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE saved_contents ENABLE ROW LEVEL SECURITY;
 
 -- Policies for profiles
-CREATE POLICY "Users can view own profile"
+DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
+DROP POLICY IF EXISTS "Anyone can view topics" ON topics;
+DROP POLICY IF EXISTS "Anyone can view contents" ON contents;
+DROP POLICY IF EXISTS "Users can manage own topic preferences" ON user_topic_preferences;
+DROP POLICY IF EXISTS "Users can manage own interactions" ON user_interactions;
+DROP POLICY IF EXISTS "Users can manage own saved contents" ON saved_contents;  
+
+CREATE POLICY "Enable read access for users based on user_id"
   ON profiles FOR SELECT
   TO authenticated
   USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can update own profile"
+CREATE POLICY "Enable update for users based on user_id"
   ON profiles FOR UPDATE
   TO authenticated
   USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can insert own profile"
+CREATE POLICY "Enable insert for users based on user_id"
   ON profiles FOR INSERT
   TO authenticated
   WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Enable insert for service role"
+  ON profiles FOR INSERT
+  TO service_role
+  WITH CHECK (true);
 
 -- Policies for topics (public read)
 CREATE POLICY "Anyone can view topics"
@@ -220,9 +211,3 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Trigger to automatically update points when interactions are created
-CREATE TRIGGER update_points_on_interaction
-  AFTER INSERT ON user_interactions
-  FOR EACH ROW
-  EXECUTE FUNCTION update_user_points();

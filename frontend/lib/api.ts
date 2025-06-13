@@ -2,6 +2,11 @@ import { supabase } from './supabase';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
 
+interface ApiError {
+  detail: string;
+  status?: number;
+}
+
 class ApiClient {
   private async getAuthHeaders() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -15,18 +20,27 @@ class ApiClient {
     };
   }
 
+  private async handleResponse(response: Response) {
+    const data = await response.json();
+    
+    if (!response.ok) {
+      const error: ApiError = {
+        detail: data.detail || 'An error occurred',
+        status: response.status
+      };
+      throw error;
+    }
+    
+    return data;
+  }
+
   async get(endpoint: string) {
     const headers = await this.getAuthHeaders();
     const response = await fetch(`${API_URL}${endpoint}`, {
       method: 'GET',
       headers,
     });
-
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.status} ${response.statusText}`);
-    }
-
-    return response.json();
+    return this.handleResponse(response);
   }
 
   async post(endpoint: string, data: any) {
@@ -36,12 +50,7 @@ class ApiClient {
       headers,
       body: JSON.stringify(data),
     });
-
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.status} ${response.statusText}`);
-    }
-
-    return response.json();
+    return this.handleResponse(response);
   }
 
   async delete(endpoint: string) {
@@ -50,12 +59,7 @@ class ApiClient {
       method: 'DELETE',
       headers,
     });
-
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.status} ${response.statusText}`);
-    }
-
-    return response.json();
+    return this.handleResponse(response);
   }
 
   // Content methods
@@ -110,6 +114,19 @@ class ApiClient {
 
   async getRecommendations(limit = 10) {
     return this.get(`/api/recommendations?limit=${limit}`);
+  }
+
+  // Admin methods
+  async createContent(content: {
+    title: string;
+    summary: string;
+    content_type?: string;
+    topic_id?: string;
+    tags?: string[];
+    difficulty_level?: number;
+    estimated_read_time?: number;
+  }) {
+    return this.post('/api/contents', content);
   }
 }
 
