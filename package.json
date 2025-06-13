@@ -3,13 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "frontend": "cd frontend && npm run dev",
-    "backend": "cd backend && uvicorn main:app --host 0.0.0.0 --port 8000",
-    "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
-    "install-all": "cd frontend && npm install && cd ../backend && pip install -r requirements.txt",
+    "frontend": "cd frontend && npx expo start --lan",
+    "backend": "cd backend && call venv\\Scripts\\activate && uvicorn main:app --host 0.0.0.0 --port 8000 --reload",
+    "dev": "concurrently \"npm run frontend\" \"npm run backend\"",
     "migrate": "cd supabase && npx supabase db push"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3"
+  },
+  "dependencies": {
+    "expo": "^53.0.11"
   }
 }
