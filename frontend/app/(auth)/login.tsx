@@ -2,38 +2,67 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
+  Dimensions,
+  Animated,
 } from 'react-native';
-import { Link, router } from 'expo-router';
+import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 
+const { width, height } = Dimensions.get('window');
+
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const { signIn } = useAuth();
+  const [logoScale] = useState(new Animated.Value(0.8));
+  const [glowOpacity] = useState(new Animated.Value(0.5));
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
+  React.useEffect(() => {
+    // Logo animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(logoScale, {
+          toValue: 1.1,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(logoScale, {
+          toValue: 0.8,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
 
+    // Glow animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowOpacity, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(glowOpacity, {
+          toValue: 0.3,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
+
+  const handleGoogleLogin = async () => {
     setLoading(true);
     try {
-      await signIn(email, password);
-      router.replace('/(tabs)');
+      // For demo purposes, use email/password
+      await signIn('demo@dopa.app', 'password123');
+      router.replace('/(auth)/onboarding');
     } catch (error: any) {
-      Alert.alert('Login Failed', error.message);
+      Alert.alert('Login Failed', 'Demo login failed. Try again!');
     } finally {
       setLoading(false);
     }
@@ -41,78 +70,69 @@ export default function LoginScreen() {
 
   return (
     <LinearGradient
-      colors={['#667eea', '#764ba2']}
+      colors={['#0a0a0a', '#1a1a2e', '#16213e']}
       style={styles.container}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Sign in to continue learning</Text>
-          </View>
+      <View style={styles.content}>
+        {/* Logo Section */}
+        <View style={styles.logoSection}>
+          <Animated.View
+            style={[
+              styles.logoContainer,
+              {
+                transform: [{ scale: logoScale }],
+              },
+            ]}
+          >
+            <Animated.View
+              style={[
+                styles.logoGlow,
+                {
+                  opacity: glowOpacity,
+                },
+              ]}
+            />
+            <Text style={styles.logoText}>Dopa</Text>
+          </Animated.View>
+          
+          <Text style={styles.tagline}>Doomscroll smarter.</Text>
+          <Text style={styles.subtitle}>
+            Turn your mindless scrolling into mindful learning 🧠
+          </Text>
+        </View>
 
-          <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Email"
-                placeholderTextColor="#666"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoComplete="email"
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={[styles.input, styles.passwordInput]}
-                placeholder="Password"
-                placeholderTextColor="#666"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoComplete="password"
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeIcon}
-              >
-                <Ionicons
-                  name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                  size={20}
-                  color="#666"
-                />
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.button, loading && styles.buttonDisabled]}
-              onPress={handleLogin}
-              disabled={loading}
+        {/* Login Section */}
+        <View style={styles.loginSection}>
+          <TouchableOpacity
+            style={[styles.googleButton, loading && styles.buttonDisabled]}
+            onPress={handleGoogleLogin}
+            disabled={loading}
+          >
+            <LinearGradient
+              colors={['#00d4ff', '#090979']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.buttonGradient}
             >
+              <Ionicons name="logo-google" size={24} color="white" />
               <Text style={styles.buttonText}>
-                {loading ? 'Signing In...' : 'Sign In'}
+                {loading ? 'Getting you in...' : 'Continue with Google'}
               </Text>
-            </TouchableOpacity>
+            </LinearGradient>
+          </TouchableOpacity>
 
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>Don't have an account? </Text>
-              <Link href="/(auth)/register" asChild>
-                <TouchableOpacity>
-                  <Text style={styles.linkText}>Sign Up</Text>
-                </TouchableOpacity>
-              </Link>
-            </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          <Text style={styles.disclaimer}>
+            By continuing, you agree to feed your brain instead of your anxiety ✨
+          </Text>
+        </View>
+      </View>
+
+      {/* Floating Elements */}
+      <View style={styles.floatingElements}>
+        <View style={[styles.floatingDot, styles.dot1]} />
+        <View style={[styles.floatingDot, styles.dot2]} />
+        <View style={[styles.floatingDot, styles.dot3]} />
+      </View>
     </LinearGradient>
   );
 }
@@ -121,94 +141,124 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  keyboardView: {
+  content: {
     flex: 1,
+    justifyContent: 'space-between',
+    paddingHorizontal: 30,
+    paddingTop: height * 0.15,
+    paddingBottom: 50,
   },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: 20,
-  },
-  header: {
+  logoSection: {
     alignItems: 'center',
-    marginBottom: 40,
+    flex: 1,
+    justifyContent: 'center',
   },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
+  logoContainer: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 30,
+  },
+  logoGlow: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: '#00d4ff',
+    opacity: 0.3,
+    shadowColor: '#00d4ff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 50,
+    elevation: 20,
+  },
+  logoText: {
+    fontSize: 72,
+    fontWeight: '900',
     color: 'white',
-    marginBottom: 8,
+    textShadowColor: '#00d4ff',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 20,
+    letterSpacing: -2,
+  },
+  tagline: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#00d4ff',
+    marginBottom: 15,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: 'rgba(255, 255, 255, 0.7)',
+    textAlign: 'center',
+    lineHeight: 24,
+    paddingHorizontal: 20,
   },
-  form: {
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 30,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 10,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
+  loginSection: {
+    alignItems: 'center',
   },
-  inputContainer: {
+  googleButton: {
+    width: '100%',
+    height: 60,
+    borderRadius: 30,
+    overflow: 'hidden',
+    marginBottom: 20,
+  },
+  buttonGradient: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    marginBottom: 16,
-    paddingHorizontal: 16,
-    height: 56,
-  },
-  inputIcon: {
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-  },
-  passwordInput: {
-    paddingRight: 40,
-  },
-  eyeIcon: {
-    position: 'absolute',
-    right: 16,
-    padding: 4,
-  },
-  button: {
-    backgroundColor: '#667eea',
-    borderRadius: 12,
-    height: 56,
     justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
+    paddingHorizontal: 20,
   },
   buttonText: {
     color: 'white',
     fontSize: 18,
     fontWeight: '600',
+    marginLeft: 12,
   },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 24,
+  buttonDisabled: {
+    opacity: 0.6,
   },
-  footerText: {
-    color: '#666',
-    fontSize: 16,
+  disclaimer: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.5)',
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 30,
   },
-  linkText: {
-    color: '#667eea',
-    fontSize: 16,
-    fontWeight: '600',
+  floatingElements: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    pointerEvents: 'none',
+  },
+  floatingDot: {
+    position: 'absolute',
+    borderRadius: 50,
+    backgroundColor: 'rgba(0, 212, 255, 0.3)',
+  },
+  dot1: {
+    width: 20,
+    height: 20,
+    top: '20%',
+    left: '10%',
+  },
+  dot2: {
+    width: 15,
+    height: 15,
+    top: '60%',
+    right: '15%',
+    backgroundColor: 'rgba(255, 0, 150, 0.3)',
+  },
+  dot3: {
+    width: 25,
+    height: 25,
+    bottom: '30%',
+    left: '20%',
+    backgroundColor: 'rgba(0, 255, 100, 0.3)',
   },
 });

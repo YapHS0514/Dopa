@@ -6,27 +6,33 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { apiClient } from '../../lib/api';
-import { Ionicons } from '@expo/vector-icons';
+
+const { width } = Dimensions.get('window');
 
 interface Topic {
   id: string;
   name: string;
-  description: string;
+  emoji: string;
   color: string;
-  icon: string;
+  description: string;
 }
 
-const SAMPLE_TOPICS: Topic[] = [
-  { id: '1', name: 'Technology', description: 'Latest tech trends', color: '#3B82F6', icon: 'phone-portrait-outline' },
-  { id: '2', name: 'Science', description: 'Scientific discoveries', color: '#10B981', icon: 'flask-outline' },
-  { id: '3', name: 'History', description: 'Historical events', color: '#F59E0B', icon: 'library-outline' },
-  { id: '4', name: 'Sports', description: 'Sports and fitness', color: '#EF4444', icon: 'trophy-outline' },
-  { id: '5', name: 'Health', description: 'Wellness and health', color: '#EC4899', icon: 'heart-outline' },
-  { id: '6', name: 'Business', description: 'Business insights', color: '#6366F1', icon: 'briefcase-outline' },
+const TOPICS: Topic[] = [
+  { id: '1', name: 'Science', emoji: '🧪', color: '#00d4ff', description: 'Mind-blowing discoveries' },
+  { id: '2', name: 'Space', emoji: '🚀', color: '#ff006e', description: 'Cosmic mysteries' },
+  { id: '3', name: 'Psychology', emoji: '🧠', color: '#8338ec', description: 'How your brain works' },
+  { id: '4', name: 'History', emoji: '🏛️', color: '#ffbe0b', description: 'Wild stories from the past' },
+  { id: '5', name: 'Pop Culture', emoji: '🎭', color: '#fb5607', description: 'What\'s trending' },
+  { id: '6', name: 'Random Facts', emoji: '🎲', color: '#3a86ff', description: 'Weird & wonderful' },
+  { id: '7', name: 'Technology', emoji: '💻', color: '#06ffa5', description: 'Future is now' },
+  { id: '8', name: 'Nature', emoji: '🌿', color: '#2d6a4f', description: 'Planet Earth secrets' },
+  { id: '9', name: 'Food', emoji: '🍕', color: '#f77f00', description: 'Tasty knowledge' },
+  { id: '10', name: 'Sports', emoji: '⚽', color: '#d62828', description: 'Athletic achievements' },
 ];
 
 export default function OnboardingScreen() {
@@ -43,9 +49,9 @@ export default function OnboardingScreen() {
     setSelectedTopics(newSelected);
   };
 
-  const handleComplete = async () => {
+  const handleContinue = async () => {
     if (selectedTopics.size === 0) {
-      Alert.alert('Please select at least one topic to continue');
+      Alert.alert('Hold up! 🛑', 'Pick at least one topic to get your brain juice flowing');
       return;
     }
 
@@ -53,72 +59,117 @@ export default function OnboardingScreen() {
     try {
       const preferences = Array.from(selectedTopics).map(topicId => ({
         topic_id: topicId,
-        points: 50, // Initial preference points
+        points: 50,
       }));
 
       await apiClient.updateUserPreferences(preferences);
       router.replace('/(tabs)');
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to save preferences. Please try again.');
+      Alert.alert('Oops! 😅', 'Something went wrong. Let\'s try that again!');
       console.error('Onboarding error:', error);
     } finally {
       setLoading(false);
     }
   };
 
+  const selectedTopicsList = Array.from(selectedTopics).map(id => 
+    TOPICS.find(topic => topic.id === id)
+  ).filter(Boolean);
+
   return (
     <LinearGradient
-      colors={['#667eea', '#764ba2']}
+      colors={['#0a0a0a', '#1a1a2e', '#16213e']}
       style={styles.container}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Choose Your Interests</Text>
+          <Text style={styles.title}>What makes you curious? 🤔</Text>
           <Text style={styles.subtitle}>
-            Select topics you'd like to learn about to personalize your experience
+            Pick your poison (but like, the good kind that makes you smarter)
           </Text>
         </View>
 
-        <View style={styles.topicsContainer}>
-          {SAMPLE_TOPICS.map((topic) => (
-            <TouchableOpacity
-              key={topic.id}
-              style={[
-                styles.topicCard,
-                selectedTopics.has(topic.id) && styles.topicCardSelected,
-              ]}
-              onPress={() => toggleTopic(topic.id)}
+        {/* Selected Topics Chips */}
+        {selectedTopicsList.length > 0 && (
+          <View style={styles.selectedSection}>
+            <Text style={styles.selectedLabel}>Your vibe:</Text>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.selectedChips}
             >
-              <View style={[styles.topicIcon, { backgroundColor: topic.color }]}>
-                <Ionicons name={topic.icon as any} size={24} color="white" />
-              </View>
-              <View style={styles.topicInfo}>
-                <Text style={styles.topicName}>{topic.name}</Text>
-                <Text style={styles.topicDescription}>{topic.description}</Text>
-              </View>
-              {selectedTopics.has(topic.id) && (
-                <Ionicons name="checkmark-circle" size={24} color="#10B981" />
-              )}
-            </TouchableOpacity>
-          ))}
+              {selectedTopicsList.map((topic) => (
+                <TouchableOpacity
+                  key={topic!.id}
+                  style={[styles.selectedChip, { backgroundColor: topic!.color }]}
+                  onPress={() => toggleTopic(topic!.id)}
+                >
+                  <Text style={styles.selectedChipText}>
+                    {topic!.emoji} {topic!.name}
+                  </Text>
+                  <Text style={styles.removeX}>×</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Topics Grid */}
+        <View style={styles.topicsGrid}>
+          {TOPICS.map((topic) => {
+            const isSelected = selectedTopics.has(topic.id);
+            return (
+              <TouchableOpacity
+                key={topic.id}
+                style={[
+                  styles.topicCard,
+                  isSelected && { borderColor: topic.color, borderWidth: 3 },
+                ]}
+                onPress={() => toggleTopic(topic.id)}
+              >
+                <LinearGradient
+                  colors={isSelected ? [topic.color + '40', topic.color + '20'] : ['#1a1a2e', '#16213e']}
+                  style={styles.topicGradient}
+                >
+                  <Text style={styles.topicEmoji}>{topic.emoji}</Text>
+                  <Text style={styles.topicName}>{topic.name}</Text>
+                  <Text style={styles.topicDescription}>{topic.description}</Text>
+                  {isSelected && (
+                    <View style={[styles.checkmark, { backgroundColor: topic.color }]}>
+                      <Text style={styles.checkmarkText}>✓</Text>
+                    </View>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleComplete}
-          disabled={loading || selectedTopics.size === 0}
-        >
-          <Text style={styles.buttonText}>
-            {loading ? 'Setting up...' : `Continue (${selectedTopics.size} selected)`}
-          </Text>
-        </TouchableOpacity>
+        {/* Continue Button */}
+        <View style={styles.buttonSection}>
+          <TouchableOpacity
+            style={[styles.continueButton, selectedTopics.size === 0 && styles.buttonDisabled]}
+            onPress={handleContinue}
+            disabled={loading || selectedTopics.size === 0}
+          >
+            <LinearGradient
+              colors={selectedTopics.size > 0 ? ['#00d4ff', '#090979'] : ['#333', '#222']}
+              style={styles.buttonGradient}
+            >
+              <Text style={styles.buttonText}>
+                {loading ? 'Setting up your feed...' : `Let's go! (${selectedTopics.size} selected)`}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.skipButton}
-          onPress={() => router.replace('/(tabs)')}
-        >
-          <Text style={styles.skipText}>Skip for now</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.skipButton}
+            onPress={() => router.replace('/(tabs)')}
+          >
+            <Text style={styles.skipText}>Skip for now (but you'll miss out 😢)</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </LinearGradient>
   );
@@ -129,93 +180,141 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    flexGrow: 1,
-    padding: 20,
+    paddingHorizontal: 20,
     paddingTop: 60,
+    paddingBottom: 40,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 30,
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
+    fontWeight: '800',
     color: 'white',
-    marginBottom: 12,
     textAlign: 'center',
+    marginBottom: 12,
   },
   subtitle: {
     fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: 'rgba(255, 255, 255, 0.7)',
     textAlign: 'center',
     lineHeight: 22,
+    paddingHorizontal: 10,
   },
-  topicsContainer: {
+  selectedSection: {
+    marginBottom: 30,
+  },
+  selectedLabel: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#00d4ff',
+    marginBottom: 12,
+  },
+  selectedChips: {
+    paddingRight: 20,
+  },
+  selectedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+  selectedChipText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  removeX: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  topicsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
     marginBottom: 40,
   },
   topicCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  topicCardSelected: {
+    width: (width - 50) / 2,
+    height: 120,
+    marginBottom: 15,
+    borderRadius: 20,
+    overflow: 'hidden',
     borderWidth: 2,
-    borderColor: '#10B981',
+    borderColor: 'transparent',
   },
-  topicIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  topicGradient: {
+    flex: 1,
+    padding: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    position: 'relative',
   },
-  topicInfo: {
-    flex: 1,
+  topicEmoji: {
+    fontSize: 32,
+    marginBottom: 8,
   },
   topicName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
+    fontSize: 16,
+    fontWeight: '700',
+    color: 'white',
+    textAlign: 'center',
     marginBottom: 4,
   },
   topicDescription: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.6)',
+    textAlign: 'center',
   },
-  button: {
-    backgroundColor: 'white',
+  checkmark: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
     borderRadius: 12,
-    height: 56,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
   },
-  buttonDisabled: {
-    opacity: 0.6,
+  checkmarkText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  buttonSection: {
+    alignItems: 'center',
+  },
+  continueButton: {
+    width: '100%',
+    height: 60,
+    borderRadius: 30,
+    overflow: 'hidden',
+    marginBottom: 20,
+  },
+  buttonGradient: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   buttonText: {
-    color: '#667eea',
+    color: 'white',
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
+  },
+  buttonDisabled: {
+    opacity: 0.5,
   },
   skipButton: {
-    alignItems: 'center',
     padding: 16,
   },
   skipText: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
