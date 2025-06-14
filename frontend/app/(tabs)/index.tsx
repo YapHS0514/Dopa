@@ -4,11 +4,11 @@ import {
   Text,
   StyleSheet,
   Dimensions,
-  PanGestureHandler,
   Animated,
   TouchableOpacity,
   Alert,
 } from 'react-native';
+import { PanGestureHandler } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
