@@ -33,7 +33,7 @@ interface UserPreference {
 }
 
 export default function ProfileScreen() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, loading: authLoading } = useAuth();
   const [stats, setStats] = useState<UserStats | null>(null);
   const [preferences, setPreferences] = useState<UserPreference[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,8 +55,10 @@ export default function ProfileScreen() {
   };
 
   useEffect(() => {
-    fetchUserData();
-  }, []);
+    if (!authLoading) {
+      fetchUserData();
+    }
+  }, [authLoading]);
 
   const handleSignOut = async () => {
     Alert.alert(
@@ -109,6 +111,16 @@ export default function ProfileScreen() {
       </View>
     </View>
   );
+
+  if (authLoading || loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text>Loading...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -182,6 +194,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   scrollContent: {
     paddingBottom: 20,

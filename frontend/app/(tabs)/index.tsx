@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ContentCard } from '../../components/ContentCard';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
+import { useAuth } from '../../contexts/AuthContext';
 import { apiClient } from '../../lib/api';
 
 interface Content {
@@ -29,6 +30,7 @@ interface Content {
 }
 
 export default function HomeScreen() {
+  const { loading: authLoading } = useAuth();
   const [contents, setContents] = useState<Content[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -47,8 +49,10 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
-    fetchRecommendations();
-  }, []);
+    if (!authLoading) {
+      fetchRecommendations();
+    }
+  }, [authLoading]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -70,7 +74,7 @@ export default function HomeScreen() {
     />
   );
 
-  if (loading) {
+  if (authLoading || loading) {
     return <LoadingSpinner />;
   }
 

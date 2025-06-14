@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ContentCard } from '../../components/ContentCard';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
+import { useAuth } from '../../contexts/AuthContext';
 import { apiClient } from '../../lib/api';
 
 interface SavedContent {
@@ -33,6 +34,7 @@ interface SavedContent {
 }
 
 export default function SavedScreen() {
+  const { loading: authLoading } = useAuth();
   const [savedContents, setSavedContents] = useState<SavedContent[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -51,8 +53,10 @@ export default function SavedScreen() {
   };
 
   useEffect(() => {
-    fetchSavedContents();
-  }, []);
+    if (!authLoading) {
+      fetchSavedContents();
+    }
+  }, [authLoading]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -87,7 +91,7 @@ export default function SavedScreen() {
     />
   );
 
-  if (loading) {
+  if (authLoading || loading) {
     return <LoadingSpinner />;
   }
 

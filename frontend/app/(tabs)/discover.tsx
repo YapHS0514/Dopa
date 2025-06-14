@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ContentCard } from '../../components/ContentCard';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
+import { useAuth } from '../../contexts/AuthContext';
 import { apiClient } from '../../lib/api';
 
 interface Topic {
@@ -33,6 +34,7 @@ interface Content {
 }
 
 export default function DiscoverScreen() {
+  const { loading: authLoading } = useAuth();
   const [topics, setTopics] = useState<Topic[]>([]);
   const [contents, setContents] = useState<Content[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
@@ -62,12 +64,14 @@ export default function DiscoverScreen() {
   };
 
   useEffect(() => {
-    const loadData = async () => {
-      await fetchTopics();
-      await fetchContents();
-    };
-    loadData();
-  }, []);
+    if (!authLoading) {
+      const loadData = async () => {
+        await fetchTopics();
+        await fetchContents();
+      };
+      loadData();
+    }
+  }, [authLoading]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -118,7 +122,7 @@ export default function DiscoverScreen() {
     />
   );
 
-  if (loading) {
+  if (authLoading || loading) {
     return <LoadingSpinner />;
   }
 
