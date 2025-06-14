@@ -67,6 +67,19 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     except Exception as e:
         raise HTTPException(status_code=401, detail="Invalid authentication token")
 
+# Optional dependency to get current user (returns None if not authenticated)
+async def optional_get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))):
+    if not credentials:
+        return None
+    try:
+        # Verify the JWT token with Supabase
+        user = supabase.auth.get_user(credentials.credentials)
+        if not user:
+            return None
+        return user.user
+    except Exception as e:
+        return None
+
 @app.get("/")
 async def root():
     return {"message": "MicroLearn API is running", "version": "1.0.0"}
@@ -81,7 +94,7 @@ async def get_contents(
     limit: int = 20,
     offset: int = 0,
     topic_id: Optional[str] = None,
-    user=Depends(get_current_user)
+    user=Depends(optional_get_current_user)
 ):
     """Get paginated content with optional topic filtering"""
     try:
@@ -283,15 +296,12 @@ async def remove_saved_content(
 @app.get("/api/recommendations")
 async def get_recommendations(
     limit: int = 10,
-    user=Depends(get_current_user)
+    user=Depends(optional_get_current_user)
 ):
     """Get personalized content recommendations"""
     try:
-        # Get user preferences
-        prefs_response = supabase.table("user_topic_preferences").select("topic_id, preference_score").eq("user_id", user.id).execute()
-        
-        if not prefs_response.data:
-            # No preferences yet, return general content
+        if not user:
+            # No user logged in, return general content
             response = supabase.table("contents").select("""
                 *,
                 topics (
@@ -302,20 +312,11 @@ async def get_recommendations(
                 )
             """).order("created_at", desc=True).limit(limit).execute()
         else:
-            # Get content based on preferences
-            preferred_topics = [pref["topic_id"] for pref in prefs_response.data if pref["preference_score"] > 0.3]
+            # Get user preferences
+            prefs_response = supabase.table("user_topic_preferences").select("topic_id, preference_score").eq("user_id", user.id).execute()
             
-            if preferred_topics:
-                response = supabase.table("contents").select("""
-                    *,
-                    topics (
-                        id,
-                        name,
-                        color,
-                        icon
-                    )
-                """).in_("topic_id", preferred_topics).order("created_at", desc=True).limit(limit).execute()
-            else:
+            if not prefs_response.data:
+                # No preferences yet, return general content
                 response = supabase.table("contents").select("""
                     *,
                     topics (
@@ -325,6 +326,30 @@ async def get_recommendations(
                         icon
                     )
                 """).order("created_at", desc=True).limit(limit).execute()
+            else:
+                # Get content based on preferences
+                preferred_topics = [pref["topic_id"] for pref in prefs_response.data if pref["preference_score"] > 0.3]
+                
+                if preferred_topics:
+                    response = supabase.table("contents").select("""
+                        *,
+                        topics (
+                            id,
+                            name,
+                            color,
+                            icon
+                        )
+                    """).in_("topic_id", preferred_topics).order("created_at", desc=True).limit(limit).execute()
+                else:
+                    response = supabase.table("contents").select("""
+                        *,
+                        topics (
+                            id,
+                            name,
+                            color,
+                            icon
+                        )
+                    """).order("created_at", desc=True).limit(limit).execute()
         
         return {"data": response.data}
     except Exception as e:

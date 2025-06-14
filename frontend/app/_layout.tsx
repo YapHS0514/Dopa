@@ -17,8 +17,13 @@ function RootLayoutNav() {
   const { user, loading } = useAuth();
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.replace('/(auth)/login');
+    if (!loading) {
+      // Standard Expo Router authentication redirect pattern
+      if (!user) {
+        // User is not authenticated, redirect to auth
+        router.replace('/(auth)/login');
+      }
+      // If user is authenticated, they can access any route
     }
   }, [loading, user]);
 

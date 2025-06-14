@@ -58,11 +58,10 @@ export default function LoginScreen() {
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
-      // For demo purposes, use email/password
-      await signIn('demo@dopa.app', 'password123');
-      router.replace('/(auth)/onboarding');
+      // Placeholder login - navigate directly to home page
+      router.replace('/(tabs)');
     } catch (error: any) {
-      Alert.alert('Login Failed', 'Demo login failed. Try again!');
+      Alert.alert('Navigation Failed', 'Could not navigate to home page');
     } finally {
       setLoading(false);
     }
