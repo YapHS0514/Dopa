@@ -15,6 +15,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import * as Sentry from '@sentry/react-native';
+import { Button } from 'react-native';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -164,7 +166,6 @@ export default function LoginScreen() {
                 />
               </TouchableOpacity>
             </View>
-
             <TouchableOpacity
               style={[styles.button, loading && styles.buttonDisabled]}
               onPress={handleLogin}
