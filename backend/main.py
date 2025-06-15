@@ -1,41 +1,183 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, UUID4, Field
+from typing import List, Optional, Dict, Any, Callable
 import os
 from dotenv import load_dotenv
 from supabase import create_client, Client
 import httpx
 from datetime import datetime
+from enum import Enum
+from fastapi import Request
+from collections import defaultdict
+import time
+from fastapi.responses import JSONResponse
+import logging
+import traceback
 
 # Load environment variables
 load_dotenv()
 
+# Initialize Supabase client
+supabase_url = os.getenv("SUPABASE_URL")
+supabase_anon_key = os.getenv("SUPABASE_ANON_KEY")
+supabase_service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+project_ref = os.getenv("SUPABASE_PROJECT_REF")
+
+# Request logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Debug logging for environment variables
+logger.info("Environment variables check:")
+logger.info(f"SUPABASE_URL: {'Present' if supabase_url else 'Missing'}")
+logger.info(f"SUPABASE_ANON_KEY: {'Present' if supabase_anon_key else 'Missing'}")
+logger.info(f"SUPABASE_SERVICE_ROLE_KEY: {'Present' if supabase_service_key else 'Missing'}")
+logger.info(f"SUPABASE_PROJECT_REF: {'Present' if project_ref else 'Missing'}")
+
+if not all([supabase_url, supabase_anon_key]):
+    raise ValueError("Missing required Supabase environment variables")
+
+logger.info(f"Initializing Supabase client for project: {project_ref}")
+try:
+    supabase = create_client(supabase_url, supabase_anon_key)
+    logger.info("Supabase client initialized successfully")
+except Exception as e:
+    logger.error(f"Error initializing Supabase client: {str(e)}")
+    raise
+
+try:
+    if supabase_service_key:
+        logger.info("Initializing Supabase admin client with service role key")
+        supabase_admin = create_client(supabase_url, supabase_service_key)
+        logger.info("Supabase admin client initialized successfully")
+    else:
+        logger.warning("No service role key provided - admin operations will not be available")
+        supabase_admin = None
+except Exception as e:
+    logger.error(f"Error initializing Supabase admin client: {str(e)}")
+    raise
+
+# Initialize FastAPI app
 app = FastAPI(title="MicroLearn API", version="1.0.0")
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure this properly for production
+    allow_origins=["*"],  # For development only - restrict in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
-
-# Supabase client
-supabase_url = os.getenv("SUPABASE_URL")
-supabase_anon_key = os.getenv("SUPABASE_ANON_KEY")
-supabase_service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-
-if not all([supabase_url, supabase_anon_key]):
-    raise ValueError("Missing Supabase environment variables")
-
-supabase: Client = create_client(supabase_url, supabase_anon_key)
-supabase_admin: Client = create_client(supabase_url, supabase_service_key) if supabase_service_key else None
 
 # Security
 security = HTTPBearer()
+
+class UserRole(str, Enum):
+    USER = "user"
+    ADMIN = "admin"
+
+class User(BaseModel):
+    id: str
+    email: str
+    access_token: str
+    role: UserRole = UserRole.USER
+    metadata: Dict[str, Any] = {}
+
+# Enhanced user dependency with role checking
+async def get_current_user(request: Request) -> User:
+    """Get the current user from the session"""
+    try:
+        # Get the authorization header
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Not authenticated")
+
+        # Extract the token
+        token = auth_header.split(" ")[1]
+        
+        # Get user from Supabase
+        response = supabase.auth.get_user(token)
+        if not response.user:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+
+        # Return user with access token
+        return User(
+            id=response.user.id,
+            email=response.user.email,
+            access_token=token,
+            role=response.user.user_metadata.get("role", UserRole.USER),
+            metadata=response.user.user_metadata
+        )
+    except Exception as e:
+        logger.error(f"Error getting current user: {str(e)}")
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+def require_role(required_role: UserRole) -> Callable:
+    async def role_checker(user: User = Depends(get_current_user)) -> User:
+        if user.role != required_role:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Operation requires {required_role} role"
+            )
+        return user
+    return role_checker
+
+# Rate limiting
+from fastapi import Request
+from collections import defaultdict
+
+# Simple in-memory rate limiting
+class RateLimiter:
+    def __init__(self, rate_limit: int = 100, time_window: int = 60):
+        self.rate_limit = rate_limit
+        self.time_window = time_window
+        self.requests: Dict[str, list] = defaultdict(list)
+    
+    def is_rate_limited(self, client_id: str) -> bool:
+        now = time.time()
+        # Remove old requests
+        self.requests[client_id] = [req_time for req_time in self.requests[client_id] 
+                                  if now - req_time < self.time_window]
+        
+        # Check if rate limit is exceeded
+        if len(self.requests[client_id]) >= self.rate_limit:
+            return True
+        
+        # Add new request
+        self.requests[client_id].append(now)
+        return False
+
+rate_limiter = RateLimiter(rate_limit=100, time_window=60)
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    client_id = request.client.host if request.client else "unknown"
+    
+    if rate_limiter.is_rate_limited(client_id):
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Too many requests. Please try again later."}
+        )
+    
+    return await call_next(request)
+
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    duration = time.time() - start_time
+    
+    logger.info(
+        f"Method: {request.method} Path: {request.url.path} "
+        f"Status: {response.status_code} Duration: {duration:.2f}s"
+    )
+    
+    return response
 
 # Pydantic models
 class UserInteractionRequest(BaseModel):
@@ -53,19 +195,20 @@ class ContentRequest(BaseModel):
     estimated_read_time: int = 30
 
 class TopicPreferenceUpdate(BaseModel):
-    topic_id: str
-    points: int
+    topic_id: UUID4
+    points: int = Field(ge=0, le=100)  # Points must be between 0 and 100
 
-# Dependency to get current user
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    try:
-        # Verify the JWT token with Supabase
-        user = supabase.auth.get_user(credentials.credentials)
-        if not user:
-            raise HTTPException(status_code=401, detail="Invalid authentication token")
-        return user.user
-    except Exception as e:
-        raise HTTPException(status_code=401, detail="Invalid authentication token")
+class UserTopicPreference(BaseModel):
+    topic_id: str
+    points: int = 50
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "topic_id": "123e4567-e89b-12d3-a456-426614174000",
+                "points": 50
+            }
+        }
 
 @app.get("/")
 async def root():
@@ -74,6 +217,16 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+
+@app.get("/test")
+async def test_endpoint():
+    return {"status": "ok", "message": "Backend is accessible"}
+
+@app.get("/ping")
+async def ping():
+    """Test endpoint to verify backend is accessible"""
+    logger.info("Ping endpoint hit!")
+    return {"message": "pong"}
 
 # Content endpoints
 @app.get("/api/contents")
@@ -112,11 +265,19 @@ async def get_contents(
 @app.post("/api/contents")
 async def create_content(
     content: ContentRequest,
-    user=Depends(get_current_user)
+    user: User = Depends(require_role(UserRole.ADMIN))
 ):
     """Create new content (admin only)"""
     try:
-        response = supabase.table("contents").insert({
+        # Validate content data
+        if not content.title or not content.summary:
+            raise HTTPException(status_code=400, detail="Title and summary are required")
+        
+        if content.difficulty_level not in range(1, 6):
+            raise HTTPException(status_code=400, detail="Difficulty level must be between 1 and 5")
+        
+        # Create content using admin client to bypass RLS
+        response = supabase_admin.table("contents").insert({
             "title": content.title,
             "summary": content.summary,
             "content_type": content.content_type,
@@ -124,11 +285,19 @@ async def create_content(
             "tags": content.tags,
             "difficulty_level": content.difficulty_level,
             "estimated_read_time": content.estimated_read_time,
-            "ai_generated": True
+            "ai_generated": True,
+            "created_by": user.id
         }).execute()
         
-        return {"data": response.data[0], "message": "Content created successfully"}
+        if not response.data:
+            raise HTTPException(status_code=500, detail="Failed to create content")
+        
+        return {
+            "data": response.data[0],
+            "message": "Content created successfully"
+        }
     except Exception as e:
+        logger.error(f"Error creating content: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # User interaction endpoints
@@ -174,10 +343,31 @@ async def get_user_stats(user=Depends(get_current_user)):
 async def get_topics():
     """Get all available topics"""
     try:
-        response = supabase.table("topics").select("*").order("name").execute()
-        return {"data": response.data}
+        logger.info("Attempting to fetch topics from Supabase...")
+        
+        # First check if we can access the table
+        count_response = supabase.table("topics").select("id").execute()
+        logger.info(f"Topics count response: {count_response}")
+        
+        # Get all topics
+        response = supabase.table("topics").select("*").execute()
+        logger.info(f"Raw Supabase response: {response}")
+        
+        if not response.data:
+            logger.warning("No topics found in database")
+            return []
+            
+        logger.info(f"Response data: {response.data}")
+        return response.data
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error fetching topics: {str(e)}")
+        logger.error(f"Error type: {type(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch topics: {str(e)}"
+        )
 
 @app.get("/api/user/preferences")
 async def get_user_preferences(user=Depends(get_current_user)):
@@ -197,24 +387,63 @@ async def get_user_preferences(user=Depends(get_current_user)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+def get_supabase_client_for_user(access_token: str) -> Client:
+    return create_client(supabase_url, access_token)
+
 @app.post("/api/user/preferences")
 async def update_user_preferences(
-    preferences: List[TopicPreferenceUpdate],
-    user=Depends(get_current_user)
+    preferences: List[UserTopicPreference],
+    user: User = Depends(get_current_user)
 ):
-    """Update user topic preferences"""
+    """Update user's topic preferences"""
     try:
+        logger.info(f"Received preferences update request for user {user.id}")
+        logger.info(f"Received preferences: {preferences}")
+
+        if not supabase_admin:
+            raise HTTPException(
+                status_code=500,
+                detail="Service role key not configured"
+            )
+
+        # Delete existing preferences using admin client
+        delete_response = supabase_admin.table("user_topic_preferences").delete().eq("user_id", user.id).execute()
+        logger.info(f"Deleted existing preferences: {delete_response}")
+
+        # Insert new preferences using admin client
         for pref in preferences:
-            supabase.table("user_topic_preferences").upsert({
-                "user_id": user.id,
-                "topic_id": pref.topic_id,
-                "points": pref.points,
-                "preference_score": min(1.0, max(0.0, pref.points / 100.0))
-            }).execute()
-        
+            logger.info(f"Processing preference: {pref}")
+            try:
+                response = supabase_admin.table("user_topic_preferences").insert({
+                    "user_id": user.id,
+                    "topic_id": pref.topic_id,
+                    "points": pref.points
+                }).execute()
+                logger.info(f"Insert response for topic {pref.topic_id}: {response}")
+            except Exception as e:
+                logger.error(f"Error updating preference for topic {pref.topic_id}: {str(e)}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Error updating preference: {str(e)}"
+                )
+
+        onboarding_response = supabase_admin.table("profiles").update({
+            "onboarding_completed": True
+        }).eq("user_id", user.id).execute()
+        logger.info(f"Onboarding response: {onboarding_response}")
+
         return {"message": "Preferences updated successfully"}
+
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Unexpected error in update_user_preferences: {str(e)}")
+        logger.error(f"Error type: {type(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update preferences: {str(e)}"
+        )
 
 # Saved content endpoints
 @app.get("/api/saved")
@@ -288,8 +517,17 @@ async def get_recommendations(
     """Get personalized content recommendations"""
     try:
         # Get user preferences
-        prefs_response = supabase.table("user_topic_preferences").select("topic_id, preference_score").eq("user_id", user.id).execute()
-        
+        # Ensure your supabase client is authenticated with the user's access token
+        supabase.postgrest.auth(user.access_token)  # ✅ Best for request-scoped auth
+
+        # Now the RLS context will be active
+        prefs_response = supabase.table("user_topic_preferences")\
+            .select("topic_id, preference_score")\
+            .eq("user_id", user.id)\
+            .execute()
+        logger.info(f"User ID: {user.id}, type: {type(user.id)}")
+        logger.info(f"Prefs_response: {prefs_response}")
+
         if not prefs_response.data:
             # No preferences yet, return general content
             response = supabase.table("contents").select("""
@@ -301,10 +539,12 @@ async def get_recommendations(
                     icon
                 )
             """).order("created_at", desc=True).limit(limit).execute()
+            logger.info(f"No Pref_response der Response: {response.data}")
         else:
             # Get content based on preferences
             preferred_topics = [pref["topic_id"] for pref in prefs_response.data if pref["preference_score"] > 0.3]
-            
+            logger.info(f"Preferred topics: {preferred_topics}")
+
             if preferred_topics:
                 response = supabase.table("contents").select("""
                     *,
@@ -315,6 +555,7 @@ async def get_recommendations(
                         icon
                     )
                 """).in_("topic_id", preferred_topics).order("created_at", desc=True).limit(limit).execute()
+                logger.info(f"Response: {response.data}")
             else:
                 response = supabase.table("contents").select("""
                     *,
@@ -329,6 +570,45 @@ async def get_recommendations(
         return {"data": response.data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/user/onboarding-complete")
+async def complete_onboarding(user: User = Depends(get_current_user)):
+    """Mark user's onboarding as complete"""
+    try:
+        logger.info(f"Marking onboarding complete for user {user.id}")
+        
+        if not supabase_admin:
+            raise HTTPException(
+                status_code=500,
+                detail="Service role key not configured"
+            )
+
+        # Update the user's profile to mark onboarding as complete
+        response = supabase_admin.table("profiles").update({
+            "onboarding_completed": True
+        }).eq("id", user.id).execute()
+        
+        logger.info(f"Onboarding complete response: {response}")
+        
+        # Check if there was an error in the response
+        if hasattr(response, 'error') and response.error:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to update onboarding status: {response.error}"
+            )
+
+        return {"message": "Onboarding completed successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error completing onboarding: {str(e)}")
+        logger.error(f"Error type: {type(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to complete onboarding: {str(e)}"
+        )
 
 if __name__ == "__main__":
     from fastapi import FastAPI

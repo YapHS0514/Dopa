@@ -14,6 +14,7 @@ import { Link, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../../lib/supabase';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -21,6 +22,21 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const { signIn } = useAuth();
+
+  const checkOnboardingStatus = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('onboarding_completed')
+      .eq('user_id', userId)
+      .single();
+
+    if (error) {
+      console.error('Error checking onboarding status:', error);
+      return true; // Default to true if there's an error
+    }
+
+    return data?.onboarding_completed ?? true;
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -30,20 +46,67 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-      await signIn(email, password);
-      router.replace('/(tabs)');
+      const {
+        data: { user },
+        error: signInError,
+      } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
+        if (signInError.message === 'Email not confirmed') {
+          Alert.alert(
+            'Email Not Confirmed',
+            'Please check your email for a confirmation link to complete your registration.',
+            [
+              {
+                text: 'Resend Confirmation',
+                onPress: async () => {
+                  try {
+                    const { error: resendError } = await supabase.auth.resend({
+                      type: 'signup',
+                      email,
+                    });
+                    if (resendError) throw resendError;
+                    Alert.alert(
+                      'Success',
+                      'Confirmation email has been resent'
+                    );
+                  } catch (error: any) {
+                    Alert.alert('Error', error.message);
+                  }
+                },
+              },
+              {
+                text: 'OK',
+                style: 'cancel',
+              },
+            ]
+          );
+        } else {
+          throw signInError;
+        }
+        return;
+      }
+
+      if (user) {
+        const onboardingCompleted = await checkOnboardingStatus(user.id);
+        if (!onboardingCompleted) {
+          router.replace('/(auth)/onboarding');
+        } else {
+          router.replace('/(tabs)');
+        }
+      }
     } catch (error: any) {
-      Alert.alert('Login Failed', error.message);
+      Alert.alert('Error', error.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <LinearGradient
-      colors={['#667eea', '#764ba2']}
-      style={styles.container}
-    >
+    <LinearGradient colors={['#667eea', '#764ba2']} style={styles.container}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -56,7 +119,12 @@ export default function LoginScreen() {
 
           <View style={styles.form}>
             <View style={styles.inputContainer}>
-              <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
+              <Ionicons
+                name="mail-outline"
+                size={20}
+                color="#666"
+                style={styles.inputIcon}
+              />
               <TextInput
                 style={styles.input}
                 placeholder="Email"
@@ -70,7 +138,12 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+              <Ionicons
+                name="lock-closed-outline"
+                size={20}
+                color="#666"
+                style={styles.inputIcon}
+              />
               <TextInput
                 style={[styles.input, styles.passwordInput]}
                 placeholder="Password"

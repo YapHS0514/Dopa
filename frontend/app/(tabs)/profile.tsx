@@ -33,7 +33,7 @@ interface UserPreference {
 }
 
 export default function ProfileScreen() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, deleteUser } = useAuth();
   const [stats, setStats] = useState<UserStats | null>(null);
   const [preferences, setPreferences] = useState<UserPreference[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,7 +44,7 @@ export default function ProfileScreen() {
         apiClient.getUserStats(),
         apiClient.getUserPreferences(),
       ]);
-      
+
       setStats(statsResponse.data);
       setPreferences(preferencesResponse.data);
     } catch (error) {
@@ -59,20 +59,38 @@ export default function ProfileScreen() {
   }, []);
 
   const handleSignOut = async () => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await signOut();
+            router.replace('/(auth)/login');
+          } catch (error) {
+            Alert.alert('Error', 'Failed to sign out');
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleDeleteAccount = async () => {
     Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
+      'Delete Account',
+      'Are you sure you want to delete your account? This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Sign Out',
+          text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
-              await signOut();
+              await deleteUser();
               router.replace('/(auth)/login');
             } catch (error) {
-              Alert.alert('Error', 'Failed to sign out');
+              Alert.alert('Error', 'Failed to delete account');
             }
           },
         },
@@ -80,7 +98,15 @@ export default function ProfileScreen() {
     );
   };
 
-  const StatCard = ({ title, value, icon }: { title: string; value: number; icon: string }) => (
+  const StatCard = ({
+    title,
+    value,
+    icon,
+  }: {
+    title: string;
+    value: number;
+    icon: string;
+  }) => (
     <View style={styles.statCard}>
       <Ionicons name={icon as any} size={24} color="#667eea" />
       <Text style={styles.statValue}>{value}</Text>
@@ -90,8 +116,17 @@ export default function ProfileScreen() {
 
   const PreferenceItem = ({ preference }: { preference: UserPreference }) => (
     <View style={styles.preferenceItem}>
-      <View style={[styles.preferenceIcon, { backgroundColor: preference.topics.color }]}>
-        <Ionicons name={preference.topics.icon as any} size={20} color="white" />
+      <View
+        style={[
+          styles.preferenceIcon,
+          { backgroundColor: preference.topics.color },
+        ]}
+      >
+        <Ionicons
+          name={preference.topics.icon as any}
+          size={20}
+          color="white"
+        />
       </View>
       <View style={styles.preferenceInfo}>
         <Text style={styles.preferenceName}>{preference.topics.name}</Text>
@@ -116,7 +151,9 @@ export default function ProfileScreen() {
         <View style={styles.header}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
-              {user?.user_metadata?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
+              {user?.user_metadata?.full_name?.charAt(0) ||
+                user?.email?.charAt(0) ||
+                'U'}
             </Text>
           </View>
           <Text style={styles.name}>
@@ -129,10 +166,26 @@ export default function ProfileScreen() {
           <View style={styles.statsSection}>
             <Text style={styles.sectionTitle}>Your Activity</Text>
             <View style={styles.statsGrid}>
-              <StatCard title="Total" value={stats.total_interactions} icon="pulse-outline" />
-              <StatCard title="Likes" value={stats.likes_count} icon="heart-outline" />
-              <StatCard title="Saved" value={stats.saves_count} icon="bookmark-outline" />
-              <StatCard title="Views" value={stats.views_count} icon="eye-outline" />
+              <StatCard
+                title="Total"
+                value={stats.total_interactions}
+                icon="pulse-outline"
+              />
+              <StatCard
+                title="Likes"
+                value={stats.likes_count}
+                icon="heart-outline"
+              />
+              <StatCard
+                title="Saved"
+                value={stats.saves_count}
+                icon="bookmark-outline"
+              />
+              <StatCard
+                title="Views"
+                value={stats.views_count}
+                icon="eye-outline"
+              />
             </View>
           </View>
         )}
@@ -160,7 +213,11 @@ export default function ProfileScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.actionButton}>
-            <Ionicons name="information-circle-outline" size={24} color="#333" />
+            <Ionicons
+              name="information-circle-outline"
+              size={24}
+              color="#333"
+            />
             <Text style={styles.actionText}>About</Text>
             <Ionicons name="chevron-forward" size={20} color="#666" />
           </TouchableOpacity>
@@ -170,7 +227,19 @@ export default function ProfileScreen() {
             onPress={handleSignOut}
           >
             <Ionicons name="log-out-outline" size={24} color="#EF4444" />
-            <Text style={[styles.actionText, styles.signOutText]}>Sign Out</Text>
+            <Text style={[styles.actionText, styles.signOutText]}>
+              Sign Out
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionButton, styles.deleteButton]}
+            onPress={handleDeleteAccount}
+          >
+            <Ionicons name="trash-outline" size={24} color="#EF4444" />
+            <Text style={[styles.actionText, styles.deleteText]}>
+              Delete Account
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -313,6 +382,13 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   signOutText: {
+    color: '#EF4444',
+  },
+  deleteButton: {
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  deleteText: {
     color: '#EF4444',
   },
 });

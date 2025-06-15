@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,14 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { apiClient } from '../../lib/api';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 interface Topic {
   id: string;
@@ -21,201 +24,256 @@ interface Topic {
 }
 
 const SAMPLE_TOPICS: Topic[] = [
-  { id: '1', name: 'Technology', description: 'Latest tech trends', color: '#3B82F6', icon: 'phone-portrait-outline' },
-  { id: '2', name: 'Science', description: 'Scientific discoveries', color: '#10B981', icon: 'flask-outline' },
-  { id: '3', name: 'History', description: 'Historical events', color: '#F59E0B', icon: 'library-outline' },
-  { id: '4', name: 'Sports', description: 'Sports and fitness', color: '#EF4444', icon: 'trophy-outline' },
-  { id: '5', name: 'Health', description: 'Wellness and health', color: '#EC4899', icon: 'heart-outline' },
-  { id: '6', name: 'Business', description: 'Business insights', color: '#6366F1', icon: 'briefcase-outline' },
+  {
+    id: '1',
+    name: 'Technology',
+    description: 'Latest tech trends',
+    color: '#3B82F6',
+    icon: 'phone-portrait-outline',
+  },
+  {
+    id: '2',
+    name: 'Science',
+    description: 'Scientific discoveries',
+    color: '#10B981',
+    icon: 'flask-outline',
+  },
+  {
+    id: '3',
+    name: 'History',
+    description: 'Historical events',
+    color: '#F59E0B',
+    icon: 'library-outline',
+  },
+  {
+    id: '4',
+    name: 'Sports',
+    description: 'Sports and fitness',
+    color: '#EF4444',
+    icon: 'trophy-outline',
+  },
+  {
+    id: '5',
+    name: 'Health',
+    description: 'Wellness and health',
+    color: '#EC4899',
+    icon: 'heart-outline',
+  },
+  {
+    id: '6',
+    name: 'Business',
+    description: 'Business insights',
+    color: '#6366F1',
+    icon: 'briefcase-outline',
+  },
 ];
 
 export default function OnboardingScreen() {
-  const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const { user } = useAuth();
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const toggleTopic = (topicId: string) => {
-    const newSelected = new Set(selectedTopics);
-    if (newSelected.has(topicId)) {
-      newSelected.delete(topicId);
-    } else {
-      newSelected.add(topicId);
-    }
-    setSelectedTopics(newSelected);
-  };
+  useEffect(() => {
+    fetchTopics();
+  }, []);
 
-  const handleComplete = async () => {
-    if (selectedTopics.size === 0) {
-      Alert.alert('Please select at least one topic to continue');
-      return;
-    }
-
-    setLoading(true);
+  const fetchTopics = async () => {
     try {
-      const preferences = Array.from(selectedTopics).map(topicId => ({
-        topic_id: topicId,
-        points: 50, // Initial preference points
-      }));
-
-      await apiClient.updateUserPreferences(preferences);
-      router.replace('/(tabs)');
-    } catch (error: any) {
-      Alert.alert('Error', 'Failed to save preferences. Please try again.');
-      console.error('Onboarding error:', error);
+      const response = await apiClient.get<Topic[]>('/api/topics');
+      setTopics(response);
+    } catch (error) {
+      console.error('Error fetching topics:', error);
+      Alert.alert('Error', 'Failed to load topics. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+  const toggleTopic = (topicId: string) => {
+    setSelectedTopics((prev) =>
+      prev.includes(topicId)
+        ? prev.filter((id) => id !== topicId)
+        : [...prev, topicId]
+    );
+  };
+
+  const handleComplete = async () => {
+    if (selectedTopics.length === 0) {
+      Alert.alert('Error', 'Please select at least one topic');
+      return;
+    }
+
+    try {
+      const preferences = selectedTopics.map((topicId) => ({
+        topic_id: topicId,
+        points: 50,
+      }));
+
+      console.log('Sending preferences:', preferences);
+      await apiClient.post('/api/user/preferences', preferences);
+
+      // Update onboarding status
+      await apiClient.post('/api/user/onboarding-complete');
+
+      router.replace('/(tabs)');
+    } catch (error) {
+      console.error('Onboarding error:', error);
+      Alert.alert('Error', 'Failed to save preferences. Please try again.');
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#0000ff" />
+      </View>
+    );
+  }
+
   return (
-    <LinearGradient
-      colors={['#667eea', '#764ba2']}
-      style={styles.container}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Choose Your Interests</Text>
-          <Text style={styles.subtitle}>
-            Select topics you'd like to learn about to personalize your experience
-          </Text>
-        </View>
+    <ScrollView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Choose Your Topics</Text>
+        <Text style={styles.subtitle}>
+          Select the topics you're interested in
+        </Text>
+      </View>
 
-        <View style={styles.topicsContainer}>
-          {SAMPLE_TOPICS.map((topic) => (
-            <TouchableOpacity
-              key={topic.id}
-              style={[
-                styles.topicCard,
-                selectedTopics.has(topic.id) && styles.topicCardSelected,
-              ]}
-              onPress={() => toggleTopic(topic.id)}
-            >
-              <View style={[styles.topicIcon, { backgroundColor: topic.color }]}>
-                <Ionicons name={topic.icon as any} size={24} color="white" />
+      <View style={styles.topicsGrid}>
+        {topics.map((topic) => (
+          <TouchableOpacity
+            key={topic.id}
+            style={[
+              styles.topicCard,
+              { backgroundColor: topic.color },
+              selectedTopics.includes(topic.id) && styles.selectedTopic,
+            ]}
+            onPress={() => toggleTopic(topic.id)}
+          >
+            <Ionicons
+              name={topic.icon as any}
+              size={24}
+              color="white"
+              style={styles.topicIcon}
+            />
+            <Text style={styles.topicName}>{topic.name}</Text>
+            <Text style={styles.topicDescription}>{topic.description}</Text>
+            {selectedTopics.includes(topic.id) && (
+              <View style={styles.checkmarkContainer}>
+                <Ionicons name="checkmark-circle" size={24} color="white" />
               </View>
-              <View style={styles.topicInfo}>
-                <Text style={styles.topicName}>{topic.name}</Text>
-                <Text style={styles.topicDescription}>{topic.description}</Text>
-              </View>
-              {selectedTopics.has(topic.id) && (
-                <Ionicons name="checkmark-circle" size={24} color="#10B981" />
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
+            )}
+          </TouchableOpacity>
+        ))}
+      </View>
 
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleComplete}
-          disabled={loading || selectedTopics.size === 0}
-        >
-          <Text style={styles.buttonText}>
-            {loading ? 'Setting up...' : `Continue (${selectedTopics.size} selected)`}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.skipButton}
-          onPress={() => router.replace('/(tabs)')}
-        >
-          <Text style={styles.skipText}>Skip for now</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </LinearGradient>
+      <TouchableOpacity
+        style={[
+          styles.confirmButton,
+          selectedTopics.length === 0 && styles.disabledButton,
+        ]}
+        onPress={handleComplete}
+        disabled={selectedTopics.length === 0}
+      >
+        <Text style={styles.confirmButtonText}>
+          {selectedTopics.length > 0
+            ? `Confirm (${selectedTopics.length} selected)`
+            : 'Select at least one topic'}
+        </Text>
+      </TouchableOpacity>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f5f5f5',
   },
-  scrollContent: {
-    flexGrow: 1,
-    padding: 20,
-    paddingTop: 60,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
-    alignItems: 'center',
-    marginBottom: 40,
+    padding: 20,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: 'white',
-    marginBottom: 12,
-    textAlign: 'center',
+    marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
-    textAlign: 'center',
-    lineHeight: 22,
+    color: '#666',
   },
-  topicsContainer: {
-    marginBottom: 40,
+  topicsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 10,
+    justifyContent: 'space-between',
   },
   topicCard: {
-    flexDirection: 'row',
+    width: '48%',
+    aspectRatio: 1,
+    marginBottom: 15,
+    borderRadius: 12,
+    padding: 15,
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    position: 'relative',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 2,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
-  topicCardSelected: {
+  selectedTopic: {
     borderWidth: 2,
-    borderColor: '#10B981',
+    borderColor: 'white',
   },
   topicIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  topicInfo: {
-    flex: 1,
+    marginBottom: 10,
   },
   topicName: {
+    color: 'white',
     fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 5,
   },
   topicDescription: {
-    fontSize: 14,
-    color: '#666',
+    color: 'white',
+    fontSize: 12,
+    textAlign: 'center',
+    opacity: 0.9,
   },
-  button: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    height: 56,
-    justifyContent: 'center',
+  checkmarkContainer: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+  },
+  confirmButton: {
+    backgroundColor: '#007AFF',
+    margin: 20,
+    padding: 15,
+    borderRadius: 10,
     alignItems: 'center',
-    marginBottom: 16,
   },
-  buttonDisabled: {
-    opacity: 0.6,
+  disabledButton: {
+    backgroundColor: '#ccc',
   },
-  buttonText: {
-    color: '#667eea',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  skipButton: {
-    alignItems: 'center',
-    padding: 16,
-  },
-  skipText: {
-    color: 'rgba(255, 255, 255, 0.8)',
+  confirmButtonText: {
+    color: 'white',
     fontSize: 16,
+    fontWeight: 'bold',
   },
 });

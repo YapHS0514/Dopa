@@ -56,6 +56,7 @@ npm run migrate
 
 Start both frontend and backend:
 ```bash
+npm install concurrently --save-dev
 npm run dev
 ```
 
