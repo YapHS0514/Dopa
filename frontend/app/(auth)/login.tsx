@@ -12,6 +12,7 @@ import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../../lib/supabase';
 
 const { width, height } = Dimensions.get('window');
 
@@ -54,14 +55,84 @@ export default function LoginScreen() {
       ])
     ).start();
   }, []);
+  const checkOnboardingStatus = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('onboarding_completed')
+      .eq('user_id', userId)
+      .single();
+
+    if (error) {
+      console.error('Error checking onboarding status:', error);
+      return true; // Default to true if there's an error
+    }
+
+    return data?.onboarding_completed ?? true;
+  };
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
 
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
-      // Placeholder login - navigate directly to home page
-      router.replace('/(tabs)');
+      const {
+        data: { user },
+        error: signInError,
+      } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
+        if (signInError.message === 'Email not confirmed') {
+          Alert.alert(
+            'Email Not Confirmed',
+            'Please check your email for a confirmation link to complete your registration.',
+            [
+              {
+                text: 'Resend Confirmation',
+                onPress: async () => {
+                  try {
+                    const { error: resendError } = await supabase.auth.resend({
+                      type: 'signup',
+                      email,
+                    });
+                    if (resendError) throw resendError;
+                    Alert.alert(
+                      'Success',
+                      'Confirmation email has been resent'
+                    );
+                  } catch (error: any) {
+                    Alert.alert('Error', error.message);
+                  }
+                },
+              },
+              {
+                text: 'OK',
+                style: 'cancel',
+              },
+            ]
+          );
+        } else {
+          throw signInError;
+        }
+        return;
+      }
+
+      if (user) {
+        const onboardingCompleted = await checkOnboardingStatus(user.id);
+        if (!onboardingCompleted) {
+          router.replace('/(auth)/onboarding');
+        } else {
+          router.replace('/(tabs)');
+        }
+      }
     } catch (error: any) {
-      Alert.alert('Navigation Failed', 'Could not navigate to home page');
+      Alert.alert('Error', error.message);
     } finally {
       setLoading(false);
     }
@@ -99,6 +170,7 @@ export default function LoginScreen() {
             Turn your mindless scrolling into mindful learning 🧠
           </Text>
         </View>
+
 
         {/* Login Section */}
         <View style={styles.loginSection}>

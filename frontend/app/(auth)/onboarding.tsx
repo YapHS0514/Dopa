@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,15 @@ import {
   ScrollView,
   Alert,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { apiClient } from '../../lib/api';
-
 const { width } = Dimensions.get('window');
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 interface Topic {
   id: string;
@@ -22,53 +25,107 @@ interface Topic {
   description: string;
 }
 
-const TOPICS: Topic[] = [
-  { id: '1', name: 'Science', emoji: '🧪', color: '#00d4ff', description: 'Mind-blowing discoveries' },
-  { id: '2', name: 'Space', emoji: '🚀', color: '#ff006e', description: 'Cosmic mysteries' },
-  { id: '3', name: 'Psychology', emoji: '🧠', color: '#8338ec', description: 'How your brain works' },
-  { id: '4', name: 'History', emoji: '🏛️', color: '#ffbe0b', description: 'Wild stories from the past' },
-  { id: '5', name: 'Pop Culture', emoji: '🎭', color: '#fb5607', description: 'What\'s trending' },
-  { id: '6', name: 'Random Facts', emoji: '🎲', color: '#3a86ff', description: 'Weird & wonderful' },
-  { id: '7', name: 'Technology', emoji: '💻', color: '#06ffa5', description: 'Future is now' },
-  { id: '8', name: 'Nature', emoji: '🌿', color: '#2d6a4f', description: 'Planet Earth secrets' },
-  { id: '9', name: 'Food', emoji: '🍕', color: '#f77f00', description: 'Tasty knowledge' },
-  { id: '10', name: 'Sports', emoji: '⚽', color: '#d62828', description: 'Athletic achievements' },
+const SAMPLE_TOPICS: Topic[] = [
+  {
+    id: '1',
+    name: 'Technology',
+    description: 'Latest tech trends',
+    color: '#3B82F6',
+    icon: 'phone-portrait-outline',
+  },
+  {
+    id: '2',
+    name: 'Science',
+    description: 'Scientific discoveries',
+    color: '#10B981',
+    icon: 'flask-outline',
+  },
+  {
+    id: '3',
+    name: 'History',
+    description: 'Historical events',
+    color: '#F59E0B',
+    icon: 'library-outline',
+  },
+  {
+    id: '4',
+    name: 'Sports',
+    description: 'Sports and fitness',
+    color: '#EF4444',
+    icon: 'trophy-outline',
+  },
+  {
+    id: '5',
+    name: 'Health',
+    description: 'Wellness and health',
+    color: '#EC4899',
+    icon: 'heart-outline',
+  },
+  {
+    id: '6',
+    name: 'Business',
+    description: 'Business insights',
+    color: '#6366F1',
+    icon: 'briefcase-outline',
+  },
+
 ];
 
 export default function OnboardingScreen() {
-  const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const { user } = useAuth();
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const toggleTopic = (topicId: string) => {
-    const newSelected = new Set(selectedTopics);
-    if (newSelected.has(topicId)) {
-      newSelected.delete(topicId);
-    } else {
-      newSelected.add(topicId);
+  useEffect(() => {
+    fetchTopics();
+  }, []);
+
+  const fetchTopics = async () => {
+    try {
+      const response = await apiClient.get<Topic[]>('/api/topics');
+      setTopics(response);
+    } catch (error) {
+      console.error('Error fetching topics:', error);
+      Alert.alert('Error', 'Failed to load topics. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    setSelectedTopics(newSelected);
   };
 
-  const handleContinue = async () => {
-    if (selectedTopics.size === 0) {
-      Alert.alert('Hold up! 🛑', 'Pick at least one topic to get your brain juice flowing');
+  const toggleTopic = (topicId: string) => {
+    setSelectedTopics((prev) =>
+      prev.includes(topicId)
+        ? prev.filter((id) => id !== topicId)
+        : [...prev, topicId]
+    );
+  };
+
+  const handleComplete = async () => {
+    if (selectedTopics.length === 0) {
+      Alert.alert('Error', 'Please select at least one topic');
       return;
     }
 
-    setLoading(true);
     try {
-      const preferences = Array.from(selectedTopics).map(topicId => ({
+      const preferences = selectedTopics.map((topicId) => ({
         topic_id: topicId,
         points: 50,
       }));
 
-      await apiClient.updateUserPreferences(preferences);
+      console.log('Sending preferences:', preferences);
+      await apiClient.post('/api/user/preferences', preferences);
+
+      // Update onboarding status
+      await apiClient.post('/api/user/onboarding-complete');
+
       router.replace('/(tabs)');
-    } catch (error: any) {
-      Alert.alert('Oops! 😅', 'Something went wrong. Let\'s try that again!');
+
+    } catch (error) {
+
       console.error('Onboarding error:', error);
-    } finally {
-      setLoading(false);
+      Alert.alert('Error', 'Failed to save preferences. Please try again.');
     }
   };
 
@@ -178,6 +235,7 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f5f5f5',
   },
   scrollContent: {
     paddingHorizontal: 20,

@@ -70,7 +70,7 @@ export default function ProfileScreen() {
         apiClient.getUserStats(),
         apiClient.getUserPreferences(),
       ]);
-      
+
       setStats(statsResponse.data);
       setPreferences(preferencesResponse.data);
     } catch (error) {
@@ -88,17 +88,35 @@ export default function ProfileScreen() {
   }, [authLoading]);
 
   const handleSignOut = async () => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await signOut();
+            router.replace('/(auth)/login');
+          } catch (error) {
+            Alert.alert('Error', 'Failed to sign out');
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleDeleteAccount = async () => {
     Alert.alert(
       'Peace out! ✌️',
       'Sure you want to leave? Your brain will miss the gains!',
       [
         { text: 'Stay Smart', style: 'cancel' },
         {
-          text: 'Sign Out',
+          text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
-              await signOut();
+              await deleteUser();
               router.replace('/(auth)/login');
             } catch (error) {
               Alert.alert('Oops! 😅', 'Failed to sign out. Try again!');
@@ -490,5 +508,12 @@ const styles = StyleSheet.create({
   },
   signOutText: {
     color: '#ff4757',
+  },
+  deleteButton: {
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  deleteText: {
+    color: '#EF4444',
   },
 });

@@ -1,61 +1,76 @@
 import { supabase } from './supabase';
+import Constants from 'expo-constants';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
+// Get API URL from Expo config
+const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL;
+if (!API_URL) {
+  console.error('API URL not found in Expo config');
+}
+
+console.log('API URL configured as:', API_URL); // Debug log
+
+interface ApiError {
+  detail: string;
+  status?: number;
+}
 
 class ApiClient {
-  private async getAuthHeaders() {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      throw new Error('No authentication token available');
+  private baseUrl: string;
+  private token: string | null = null;
+
+  constructor() {
+    this.baseUrl = API_URL;
+  }
+
+  setToken(token: string | null) {
+    console.log('Setting API client token:', token ? 'Token present' : 'No token');
+    this.token = token;
+  }
+
+  private async handleResponse<T>(response: Response): Promise<T> {
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      console.error('API Error:', {
+        status: response.status,
+        statusText: response.statusText,
+        url: response.url,
+        errorData
+      });
+      throw new Error(errorData?.detail || response.statusText);
     }
-    
-    return {
-      'Authorization': `Bearer ${session.access_token}`,
+    return response.json();
+  }
+
+  private getHeaders(): HeadersInit {
+    const headers: HeadersInit = {
       'Content-Type': 'application/json',
     };
-  }
 
-  async get(endpoint: string) {
-    const headers = await this.getAuthHeaders();
-    const response = await fetch(`${API_URL}${endpoint}`, {
-      method: 'GET',
-      headers,
-    });
-
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.status} ${response.statusText}`);
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    return response.json();
+    return headers;
   }
 
-  async post(endpoint: string, data: any) {
-    const headers = await this.getAuthHeaders();
-    const response = await fetch(`${API_URL}${endpoint}`, {
+  async get<T>(endpoint: string): Promise<T> {
+    console.log('Making GET request to:', endpoint);
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      method: 'GET',
+      headers: this.getHeaders(),
+    });
+    return this.handleResponse<T>(response);
+  }
+
+  async post<T>(endpoint: string, data: any): Promise<T> {
+    console.log('Making POST request to:', endpoint);
+    console.log('Request data:', data);
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
       method: 'POST',
-      headers,
+      headers: this.getHeaders(),
       body: JSON.stringify(data),
     });
-
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.status} ${response.statusText}`);
-    }
-
-    return response.json();
-  }
-
-  async delete(endpoint: string) {
-    const headers = await this.getAuthHeaders();
-    const response = await fetch(`${API_URL}${endpoint}`, {
-      method: 'DELETE',
-      headers,
-    });
-
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.status} ${response.statusText}`);
-    }
-
-    return response.json();
+    return this.handleResponse<T>(response);
   }
 
   // Content methods
@@ -110,6 +125,19 @@ class ApiClient {
 
   async getRecommendations(limit = 10) {
     return this.get(`/api/recommendations?limit=${limit}`);
+  }
+
+  // Admin methods
+  async createContent(content: {
+    title: string;
+    summary: string;
+    content_type?: string;
+    topic_id?: string;
+    tags?: string[];
+    difficulty_level?: number;
+    estimated_read_time?: number;
+  }) {
+    return this.post('/api/contents', content);
   }
 }
 
