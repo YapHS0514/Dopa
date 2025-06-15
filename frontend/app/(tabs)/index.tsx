@@ -11,6 +11,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ContentCard } from '../../components/ContentCard';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { apiClient } from '../../lib/api';
+import { useAuth } from '../../contexts/AuthContext';
+import { router } from 'expo-router';
 
 interface Content {
   id: string;
@@ -28,14 +30,23 @@ interface Content {
   };
 }
 
+interface RecommendationsResponse {
+  data: Content[];
+}
+
 export default function HomeScreen() {
+  const { user, session, loading: authLoading } = useAuth();
   const [contents, setContents] = useState<Content[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchRecommendations = async () => {
     try {
-      const response = await apiClient.getRecommendations(20);
+      if (!session?.access_token) {
+        router.replace('/(auth)/login');
+        return;
+      }
+      const response = await apiClient.getRecommendations(20) as RecommendationsResponse;
       setContents(response.data);
     } catch (error: any) {
       console.error('Error fetching recommendations:', error);
@@ -47,8 +58,14 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
-    fetchRecommendations();
-  }, []);
+    if (!authLoading) {
+      if (!session?.access_token) {
+        router.replace('/(auth)/login');
+      } else {
+        fetchRecommendations();
+      }
+    }
+  }, [authLoading, session]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -70,7 +87,7 @@ export default function HomeScreen() {
     />
   );
 
-  if (loading) {
+  if (loading || authLoading) {
     return <LoadingSpinner />;
   }
 

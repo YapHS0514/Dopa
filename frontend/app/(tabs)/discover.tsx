@@ -13,6 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ContentCard } from '../../components/ContentCard';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { apiClient } from '../../lib/api';
+import { useAuth } from '../../contexts/AuthContext';
+import { router } from 'expo-router';
 
 interface Topic {
   id: string;
@@ -32,7 +34,16 @@ interface Content {
   topics: Topic;
 }
 
+interface TopicsResponse {
+  data: Topic[];
+}
+
+interface ContentsResponse {
+  data: Content[];
+}
+
 export default function DiscoverScreen() {
+  const { user, session, loading: authLoading } = useAuth();
   const [topics, setTopics] = useState<Topic[]>([]);
   const [contents, setContents] = useState<Content[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
@@ -41,7 +52,11 @@ export default function DiscoverScreen() {
 
   const fetchTopics = async () => {
     try {
-      const response = await apiClient.getTopics();
+      if (!session?.access_token) {
+        router.replace('/(auth)/login');
+        return;
+      }
+      const response = await apiClient.getTopics() as TopicsResponse;
       setTopics(response.data);
     } catch (error) {
       console.error('Error fetching topics:', error);
@@ -50,7 +65,11 @@ export default function DiscoverScreen() {
 
   const fetchContents = async (topicId?: string) => {
     try {
-      const response = await apiClient.getContents(20, 0, topicId);
+      if (!session?.access_token) {
+        router.replace('/(auth)/login');
+        return;
+      }
+      const response = await apiClient.getContents(20, 0, topicId) as ContentsResponse;
       setContents(response.data);
     } catch (error: any) {
       console.error('Error fetching contents:', error);
@@ -62,12 +81,18 @@ export default function DiscoverScreen() {
   };
 
   useEffect(() => {
-    const loadData = async () => {
-      await fetchTopics();
-      await fetchContents();
-    };
-    loadData();
-  }, []);
+    if (!authLoading) {
+      if (!session?.access_token) {
+        router.replace('/(auth)/login');
+      } else {
+        const loadData = async () => {
+          await fetchTopics();
+          await fetchContents();
+        };
+        loadData();
+      }
+    }
+  }, [authLoading, session]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -118,7 +143,7 @@ export default function DiscoverScreen() {
     />
   );
 
-  if (loading) {
+  if (loading || authLoading) {
     return <LoadingSpinner />;
   }
 
