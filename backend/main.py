@@ -427,6 +427,11 @@ async def update_user_preferences(
                     detail=f"Error updating preference: {str(e)}"
                 )
 
+        onboarding_response = supabase_admin.table("profiles").update({
+            "onboarding_completed": True
+        }).eq("user_id", user.id).execute()
+        logger.info(f"Onboarding response: {onboarding_response}")
+
         return {"message": "Preferences updated successfully"}
 
     except HTTPException:
@@ -512,8 +517,17 @@ async def get_recommendations(
     """Get personalized content recommendations"""
     try:
         # Get user preferences
-        prefs_response = supabase.table("user_topic_preferences").select("topic_id, preference_score").eq("user_id", user.id).execute()
-        
+        # Ensure your supabase client is authenticated with the user's access token
+        supabase.postgrest.auth(user.access_token)  # ✅ Best for request-scoped auth
+
+        # Now the RLS context will be active
+        prefs_response = supabase.table("user_topic_preferences")\
+            .select("topic_id, preference_score")\
+            .eq("user_id", user.id)\
+            .execute()
+        logger.info(f"User ID: {user.id}, type: {type(user.id)}")
+        logger.info(f"Prefs_response: {prefs_response}")
+
         if not prefs_response.data:
             # No preferences yet, return general content
             response = supabase.table("contents").select("""
@@ -525,10 +539,12 @@ async def get_recommendations(
                     icon
                 )
             """).order("created_at", desc=True).limit(limit).execute()
+            logger.info(f"No Pref_response der Response: {response.data}")
         else:
             # Get content based on preferences
             preferred_topics = [pref["topic_id"] for pref in prefs_response.data if pref["preference_score"] > 0.3]
-            
+            logger.info(f"Preferred topics: {preferred_topics}")
+
             if preferred_topics:
                 response = supabase.table("contents").select("""
                     *,
@@ -539,6 +555,7 @@ async def get_recommendations(
                         icon
                     )
                 """).in_("topic_id", preferred_topics).order("created_at", desc=True).limit(limit).execute()
+                logger.info(f"Response: {response.data}")
             else:
                 response = supabase.table("contents").select("""
                     *,
