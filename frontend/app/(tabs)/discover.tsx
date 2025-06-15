@@ -32,6 +32,10 @@ interface Content {
   topics: Topic;
 }
 
+interface ApiResponse<T> {
+  data: T;
+}
+
 export default function DiscoverScreen() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [contents, setContents] = useState<Content[]>([]);
@@ -41,7 +45,7 @@ export default function DiscoverScreen() {
 
   const fetchTopics = async () => {
     try {
-      const response = await apiClient.getTopics();
+      const response = (await apiClient.getTopics()) as ApiResponse<Topic[]>;
       setTopics(response.data);
     } catch (error) {
       console.error('Error fetching topics:', error);
@@ -50,7 +54,11 @@ export default function DiscoverScreen() {
 
   const fetchContents = async (topicId?: string) => {
     try {
-      const response = await apiClient.getContents(20, 0, topicId);
+      const response = (await apiClient.getContents(
+        20,
+        0,
+        topicId
+      )) as ApiResponse<Content[]>;
       setContents(response.data);
     } catch (error: any) {
       console.error('Error fetching contents:', error);
@@ -84,7 +92,11 @@ export default function DiscoverScreen() {
     }
   };
 
-  const handleInteraction = async (contentId: string, type: string, value: number) => {
+  const handleInteraction = async (
+    contentId: string,
+    type: string,
+    value: number
+  ) => {
     try {
       await apiClient.recordInteraction(contentId, type, value);
     } catch (error) {
@@ -112,10 +124,7 @@ export default function DiscoverScreen() {
   );
 
   const renderContent = ({ item }: { item: Content }) => (
-    <ContentCard
-      content={item}
-      onInteraction={handleInteraction}
-    />
+    <ContentCard content={item} onInteraction={handleInteraction} />
   );
 
   if (loading) {

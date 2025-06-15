@@ -115,7 +115,7 @@ export default function OnboardingScreen() {
       await apiClient.post('/api/user/preferences', preferences);
 
       // Update onboarding status
-      await apiClient.post('/api/user/onboarding-complete');
+      await apiClient.post('/api/user/onboarding-complete', {});
 
       router.replace('/(tabs)');
     } catch (error) {

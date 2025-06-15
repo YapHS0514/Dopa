@@ -73,6 +73,15 @@ class ApiClient {
     return this.handleResponse<T>(response);
   }
 
+  async delete<T>(endpoint: string): Promise<T> {
+    console.log('Making DELETE request to:', endpoint);
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      method: 'DELETE',
+      headers: this.getHeaders(),
+    });
+    return this.handleResponse<T>(response);
+  }
+
   // Content methods
   async getContents(limit = 20, offset = 0, topicId?: string) {
     const params = new URLSearchParams({
