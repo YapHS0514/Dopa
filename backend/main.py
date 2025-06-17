@@ -72,9 +72,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # For development only - restrict in production
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
-    expose_headers=["*"]
+    expose_headers=["*"],
+    max_age=3600  # Cache preflight requests for 1 hour
 )
 
 # Security
@@ -345,10 +346,13 @@ async def get_user_stats(user=Depends(get_current_user)):
 
 # Topic endpoints
 @app.get("/api/topics")
-async def get_topics():
+async def get_topics(user=Depends(get_current_user)):
     """Get all available topics"""
     try:
         logger.info("Attempting to fetch topics from Supabase...")
+        
+        # Ensure your supabase client is authenticated with the user's access token
+        supabase.postgrest.auth(user.access_token)  # ✅ Best for request-scoped auth
         
         # First check if we can access the table
         count_response = supabase.table("topics").select("id").execute()
@@ -360,10 +364,10 @@ async def get_topics():
         
         if not response.data:
             logger.warning("No topics found in database")
-            return []
+            return {"data": []}
             
         logger.info(f"Response data: {response.data}")
-        return response.data
+        return {"data": response.data}
         
     except Exception as e:
         logger.error(f"Error fetching topics: {str(e)}")

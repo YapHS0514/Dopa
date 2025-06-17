@@ -1,8 +1,24 @@
 import { supabase } from './supabase';
 import Constants from 'expo-constants';
+import axios, { AxiosInstance } from 'axios';
+import { Platform } from 'react-native';
 
 // Get API URL from Expo config
-const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL;
+let API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL;
+
+// If we're on a physical device or emulator, replace 0.0.0.0 with the host IP
+if (Platform.OS !== 'web' && API_URL?.includes('0.0.0.0')) {
+  // Extract the port number
+  const port = API_URL.split(':').pop();
+  // Get the host IP from the Expo manifest
+  const hostUri = Constants.manifest2?.extra?.expoGo?.debuggerHost;
+  if (hostUri) {
+    const hostIp = hostUri.split(':')[0];
+    API_URL = `http://${hostIp}:${port}`;
+    console.log('Updated API URL for device:', API_URL);
+  }
+}
+
 if (!API_URL) {
   console.error('API URL not found in Expo config');
 }
@@ -17,60 +33,84 @@ interface ApiError {
 class ApiClient {
   private baseUrl: string;
   private token: string | null = null;
+  private readonly timeout = 5000; // 5 second timeout
+  private readonly maxRetries = 3;
+  private axiosInstance: AxiosInstance;
 
   constructor() {
     this.baseUrl = API_URL;
+    this.axiosInstance = axios.create({
+      baseURL: this.baseUrl,
+      timeout: this.timeout,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    // Add response interceptor for error handling
+    this.axiosInstance.interceptors.response.use(
+      (response) => response,
+      async (error) => {
+        const config = error.config;
+        
+        // If the error has no config or we've already retried the maximum times, throw the error
+        if (!config || config.__retryCount >= this.maxRetries) {
+          return Promise.reject(error);
+        }
+
+        // Increment the retry count
+        config.__retryCount = config.__retryCount || 0;
+        config.__retryCount++;
+
+        console.log(`Retrying request to ${config.url}, ${this.maxRetries - config.__retryCount} attempts remaining`);
+
+        // Delay before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        return this.axiosInstance(config);
+      }
+    );
   }
 
   setToken(token: string | null) {
     console.log('Setting API client token:', token ? 'Token present' : 'No token');
     this.token = token;
+    if (token) {
+      this.axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    } else {
+      delete this.axiosInstance.defaults.headers.common['Authorization'];
+    }
   }
 
-  private async handleResponse<T>(response: Response): Promise<T> {
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
+  private async handleRequest<T>(request: Promise<any>): Promise<T> {
+    try {
+      const response = await request;
+      return response.data;
+    } catch (error: any) {
       console.error('API Error:', {
-        status: response.status,
-        statusText: response.statusText,
-        url: response.url,
-        errorData
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        url: error.config?.url,
+        data: error.response?.data
       });
-      throw new Error(errorData?.detail || response.statusText);
+      throw new Error(error.response?.data?.detail || error.message);
     }
-    return response.json();
-  }
-
-  private getHeaders(): HeadersInit {
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
-    }
-
-    return headers;
   }
 
   async get<T>(endpoint: string): Promise<T> {
     console.log('Making GET request to:', endpoint);
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      method: 'GET',
-      headers: this.getHeaders(),
-    });
-    return this.handleResponse<T>(response);
+    return this.handleRequest<T>(this.axiosInstance.get(endpoint));
   }
 
   async post<T>(endpoint: string, data: any): Promise<T> {
     console.log('Making POST request to:', endpoint);
     console.log('Request data:', data);
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify(data),
-    });
-    return this.handleResponse<T>(response);
+    return this.handleRequest<T>(this.axiosInstance.post(endpoint, data));
+  }
+
+  async delete<T>(endpoint: string): Promise<T> {
+    console.log('Making DELETE request to:', endpoint);
+    return this.handleRequest<T>(this.axiosInstance.delete(endpoint));
   }
 
   async delete<T>(endpoint: string): Promise<T> {
