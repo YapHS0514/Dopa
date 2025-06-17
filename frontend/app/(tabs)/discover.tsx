@@ -40,7 +40,7 @@ interface TopicsResponse {
 
 interface ContentsResponse {
   data: Content[];
-}
+
 
 export default function DiscoverScreen() {
   const { user, session, loading: authLoading } = useAuth();
@@ -109,7 +109,11 @@ export default function DiscoverScreen() {
     }
   };
 
-  const handleInteraction = async (contentId: string, type: string, value: number) => {
+  const handleInteraction = async (
+    contentId: string,
+    type: string,
+    value: number
+  ) => {
     try {
       await apiClient.recordInteraction(contentId, type, value);
     } catch (error) {
@@ -137,10 +141,7 @@ export default function DiscoverScreen() {
   );
 
   const renderContent = ({ item }: { item: Content }) => (
-    <ContentCard
-      content={item}
-      onInteraction={handleInteraction}
-    />
+    <ContentCard content={item} onInteraction={handleInteraction} />
   );
 
   if (loading || authLoading) {

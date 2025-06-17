@@ -86,7 +86,7 @@ Set up your environment variables as follows:
   - Name: ANDROID_HOME
   - Value: C:\Users\<your_user_name>\AppData\Local\Android\SDK
 
-- Edit the Path Variable unedr User Variables and add:
+- Edit the Path Variable under User Variables and add:
   - C:\Users\<your_user_name>\AppData\Local\Android\SDK\platform-tools
   - C:\Users\<your_user_name>\AppData\Local\Android\SDK\emulator
 
