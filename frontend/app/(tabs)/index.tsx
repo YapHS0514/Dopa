@@ -27,7 +27,7 @@ interface Content {
     name: string;
     color: string;
     icon: string;
-  };
+  }[];
 }
 
 interface RecommendationsResponse {

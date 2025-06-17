@@ -81,11 +81,13 @@ export default function OnboardingScreen() {
 
   const fetchTopics = async () => {
     try {
-      const response = await apiClient.get<Topic[]>('/api/topics');
-      setTopics(response);
+      const response = await apiClient.get<{ data: Topic[] }>('/api/topics');
+      setTopics(response.data || []);
     } catch (error) {
       console.error('Error fetching topics:', error);
       Alert.alert('Error', 'Failed to load topics. Please try again.');
+      // Fallback to sample topics if API fails
+      setTopics(SAMPLE_TOPICS);
     } finally {
       setLoading(false);
     }
@@ -113,7 +115,6 @@ export default function OnboardingScreen() {
 
       console.log('Sending preferences:', preferences);
       await apiClient.post('/api/user/preferences', preferences);
-
       // Update onboarding status
       await apiClient.post('/api/user/onboarding-complete', {});
 

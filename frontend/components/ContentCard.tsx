@@ -22,7 +22,7 @@ interface Content {
     name: string;
     color: string;
     icon: string;
-  };
+  }[];
 }
 
 interface ContentCardProps {
@@ -114,10 +114,14 @@ export function ContentCard({
     <TouchableOpacity style={styles.card} onPress={handleView} activeOpacity={0.9}>
       <View style={styles.header}>
         <View style={styles.topicInfo}>
-          <View style={[styles.topicIcon, { backgroundColor: content.topics.color }]}>
-            <Ionicons name={content.topics.icon as any} size={16} color="white" />
-          </View>
-          <Text style={styles.topicName}>{content.topics.name}</Text>
+          {content.topics && content.topics[0] && (
+            <>
+              <View style={[styles.topicIcon, { backgroundColor: content.topics[0].color }]}>
+                <Ionicons name={content.topics[0].icon as any} size={16} color="white" />
+              </View>
+              <Text style={styles.topicName}>{content.topics[0].name}</Text>
+            </>
+          )}
         </View>
         <View style={styles.metadata}>
           <View style={[styles.difficultyBadge, { backgroundColor: getDifficultyColor(content.difficulty_level) }]}>

@@ -28,8 +28,12 @@ interface SavedContent {
       name: string;
       color: string;
       icon: string;
-    };
+    }[];
   };
+}
+
+interface SavedContentResponse {
+  data: SavedContent[];
 }
 
 export default function SavedScreen() {
@@ -39,7 +43,7 @@ export default function SavedScreen() {
 
   const fetchSavedContents = async () => {
     try {
-      const response = await apiClient.getSavedContent();
+      const response = await apiClient.getSavedContent() as SavedContentResponse;
       setSavedContents(response.data);
     } catch (error: any) {
       console.error('Error fetching saved contents:', error);
