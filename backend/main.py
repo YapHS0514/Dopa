@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, UUID4, Field
-from typing import List, Optional, Dict, Any, Callable
+from typing import List, Optional, Dict, Any, Callable, TypedDict
 import os
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -15,6 +15,11 @@ import time
 from fastapi.responses import JSONResponse
 import logging
 import traceback
+
+# Type definitions
+class SupabaseResponse(TypedDict):
+    data: List[Dict[str, Any]]
+    error: Optional[Dict[str, Any]]
 
 # Load environment variables
 load_dotenv()
@@ -590,7 +595,7 @@ async def complete_onboarding(user: User = Depends(get_current_user)):
         # Update the user's profile to mark onboarding as complete
         response = supabase_admin.table("profiles").update({
             "onboarding_completed": True
-        }).eq("id", user.id).execute()
+        }).eq("user_id", user.id).execute()
         
         logger.info(f"Onboarding complete response: {response}")
         
@@ -599,6 +604,13 @@ async def complete_onboarding(user: User = Depends(get_current_user)):
             raise HTTPException(
                 status_code=500,
                 detail=f"Failed to update onboarding status: {response.error}"
+            )
+
+        # Verify the update was successful
+        if not response.data:
+            raise HTTPException(
+                status_code=404,
+                detail="User profile not found"
             )
 
         return {"message": "Onboarding completed successfully"}

@@ -32,6 +32,10 @@ interface UserPreference {
   };
 }
 
+interface ApiResponse<T> {
+  data: T;
+}
+
 export default function ProfileScreen() {
   const { user, signOut, deleteUser } = useAuth();
   const [stats, setStats] = useState<UserStats | null>(null);
@@ -41,8 +45,10 @@ export default function ProfileScreen() {
   const fetchUserData = async () => {
     try {
       const [statsResponse, preferencesResponse] = await Promise.all([
-        apiClient.getUserStats(),
-        apiClient.getUserPreferences(),
+        apiClient.getUserStats() as Promise<ApiResponse<UserStats>>,
+        apiClient.getUserPreferences() as Promise<
+          ApiResponse<UserPreference[]>
+        >,
       ]);
 
       setStats(statsResponse.data);
