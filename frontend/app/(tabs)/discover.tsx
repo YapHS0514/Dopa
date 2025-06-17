@@ -40,7 +40,7 @@ interface TopicsResponse {
 
 interface ContentsResponse {
   data: Content[];
-
+}
 
 export default function DiscoverScreen() {
   const { user, session, loading: authLoading } = useAuth();
