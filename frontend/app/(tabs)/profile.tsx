@@ -32,6 +32,14 @@ interface UserPreference {
   };
 }
 
+interface UserStatsResponse {
+  data: UserStats;
+}
+
+interface UserPreferencesResponse {
+  data: UserPreference[];
+}
+
 export default function ProfileScreen() {
   const { user, signOut, deleteUser } = useAuth();
   const [stats, setStats] = useState<UserStats | null>(null);
@@ -41,8 +49,8 @@ export default function ProfileScreen() {
   const fetchUserData = async () => {
     try {
       const [statsResponse, preferencesResponse] = await Promise.all([
-        apiClient.getUserStats(),
-        apiClient.getUserPreferences(),
+        apiClient.getUserStats() as Promise<UserStatsResponse>,
+        apiClient.getUserPreferences() as Promise<UserPreferencesResponse>,
       ]);
 
       setStats(statsResponse.data);
@@ -116,28 +124,32 @@ export default function ProfileScreen() {
 
   const PreferenceItem = ({ preference }: { preference: UserPreference }) => (
     <View style={styles.preferenceItem}>
-      <View
-        style={[
-          styles.preferenceIcon,
-          { backgroundColor: preference.topics.color },
-        ]}
-      >
-        <Ionicons
-          name={preference.topics.icon as any}
-          size={20}
-          color="white"
-        />
-      </View>
-      <View style={styles.preferenceInfo}>
-        <Text style={styles.preferenceName}>{preference.topics.name}</Text>
-        <Text style={styles.preferencePoints}>{preference.points} points</Text>
-      </View>
+      {preference.topics && (
+        <>
+          <View
+            style={[
+              styles.preferenceIcon,
+              { backgroundColor: preference.topics.color || '#667eea' },
+            ]}
+          >
+            <Ionicons
+              name={(preference.topics.icon || 'bookmark-outline') as any}
+              size={20}
+              color="white"
+            />
+          </View>
+          <View style={styles.preferenceInfo}>
+            <Text style={styles.preferenceName}>{preference.topics.name || 'Unknown Topic'}</Text>
+            <Text style={styles.preferencePoints}>{preference.points} points</Text>
+          </View>
+        </>
+      )}
       <View style={styles.preferenceScore}>
         <View style={styles.scoreBar}>
           <View
             style={[
               styles.scoreProgress,
-              { width: `${preference.preference_score * 100}%` },
+              { width: `${(preference.preference_score || 0) * 100}%` },
             ]}
           />
         </View>
