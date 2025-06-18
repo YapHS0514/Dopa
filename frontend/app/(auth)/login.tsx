@@ -8,37 +8,27 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
+  Dimensions,
 } from 'react-native';
 import { Link, router } from 'expo-router';
+import * as Animatable from 'react-native-animatable';
+import { useStore } from '../../lib/store';
+import { Colors } from '../../constants/Colors';
+import { AppIcon } from '../../components/AppIcon';
+import { AuthContext } from '../../contexts/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useAuth } from '../../contexts/AuthContext';
-import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../../lib/supabase';
-import * as Sentry from '@sentry/react-native';
-import { Button } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { Feather } from '@expo/vector-icons';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const { signIn } = useAuth();
-
-  const checkOnboardingStatus = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('onboarding_completed')
-      .eq('user_id', userId)
-      .single();
-
-    if (error) {
-      console.error('Error checking onboarding status:', error);
-      return true; // Default to true if there's an error
-    }
-
-    return data?.onboarding_completed ?? true;
-  };
+  const theme = useStore((state) => state.theme);
+  const isDark = theme === 'dark';
+  const { signIn } = React.useContext(AuthContext);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -48,58 +38,8 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-      const {
-        data: { user },
-        error: signInError,
-      } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (signInError) {
-        if (signInError.message === 'Email not confirmed') {
-          Alert.alert(
-            'Email Not Confirmed',
-            'Please check your email for a confirmation link to complete your registration.',
-            [
-              {
-                text: 'Resend Confirmation',
-                onPress: async () => {
-                  try {
-                    const { error: resendError } = await supabase.auth.resend({
-                      type: 'signup',
-                      email,
-                    });
-                    if (resendError) throw resendError;
-                    Alert.alert(
-                      'Success',
-                      'Confirmation email has been resent'
-                    );
-                  } catch (error: any) {
-                    Alert.alert('Error', error.message);
-                  }
-                },
-              },
-              {
-                text: 'OK',
-                style: 'cancel',
-              },
-            ]
-          );
-        } else {
-          throw signInError;
-        }
-        return;
-      }
-
-      if (user) {
-        const onboardingCompleted = await checkOnboardingStatus(user.id);
-        if (!onboardingCompleted) {
-          router.replace('/(auth)/onboarding');
-        } else {
-          router.replace('/(tabs)');
-        }
-      }
+      await signIn(email, password);
+      router.replace('/(tabs)');
     } catch (error: any) {
       Alert.alert('Error', error.message);
     } finally {
@@ -108,84 +48,126 @@ export default function LoginScreen() {
   };
 
   return (
-    <LinearGradient colors={['#667eea', '#764ba2']} style={styles.container}>
+    <LinearGradient
+      colors={isDark ? 
+        ['#000000', '#1a1a1a'] : 
+        ['#ffffff', '#f0f0f0']}
+      style={styles.container}
+    >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Sign in to continue learning</Text>
-          </View>
+        <Animatable.View 
+          animation="fadeIn" 
+          duration={1000} 
+          style={styles.logoContainer}
+        >
+          <Animatable.View 
+            animation="bounceIn" 
+            duration={1500}
+            style={styles.iconContainer}
+          >
+            <AppIcon color={Colors[isDark ? 'dark' : 'light'].tint} />
+            <LinearGradient
+              colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0)']}
+              style={styles.iconGlow}
+            />
+          </Animatable.View>
+          <Animatable.Text
+            animation="fadeInUp"
+            delay={500}
+            style={[styles.title, { color: Colors[isDark ? 'dark' : 'light'].text }]}
+          >
+            Welcome Back
+          </Animatable.Text>
+        </Animatable.View>
 
-          <View style={styles.form}>
+        <Animatable.View
+          animation="fadeInUp"
+          delay={1000}
+          style={styles.formContainer}
+        >
+          <BlurView
+            intensity={100}
+            tint={isDark ? 'dark' : 'light'}
+            style={styles.formBlur}
+          >
             <View style={styles.inputContainer}>
-              <Ionicons
-                name="mail-outline"
-                size={20}
-                color="#666"
+              <Feather 
+                name="mail" 
+                size={20} 
+                color={Colors[isDark ? 'dark' : 'light'].textSecondary} 
                 style={styles.inputIcon}
               />
               <TextInput
-                style={styles.input}
+                style={[
+                  styles.input,
+                  { color: Colors[isDark ? 'dark' : 'light'].text }
+                ]}
                 placeholder="Email"
-                placeholderTextColor="#666"
+                placeholderTextColor={Colors[isDark ? 'dark' : 'light'].textSecondary}
                 value={email}
                 onChangeText={setEmail}
-                keyboardType="email-address"
                 autoCapitalize="none"
-                autoComplete="email"
+                keyboardType="email-address"
               />
             </View>
 
             <View style={styles.inputContainer}>
-              <Ionicons
-                name="lock-closed-outline"
-                size={20}
-                color="#666"
+              <Feather 
+                name="lock" 
+                size={20} 
+                color={Colors[isDark ? 'dark' : 'light'].textSecondary} 
                 style={styles.inputIcon}
               />
               <TextInput
-                style={[styles.input, styles.passwordInput]}
+                style={[
+                  styles.input,
+                  { color: Colors[isDark ? 'dark' : 'light'].text }
+                ]}
                 placeholder="Password"
-                placeholderTextColor="#666"
+                placeholderTextColor={Colors[isDark ? 'dark' : 'light'].textSecondary}
                 value={password}
                 onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoComplete="password"
+                secureTextEntry
               />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeIcon}
-              >
-                <Ionicons
-                  name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                  size={20}
-                  color="#666"
-                />
-              </TouchableOpacity>
             </View>
+
             <TouchableOpacity
-              style={[styles.button, loading && styles.buttonDisabled]}
+              style={[
+                styles.loginButton,
+                loading && styles.buttonDisabled
+              ]}
               onPress={handleLogin}
               disabled={loading}
             >
-              <Text style={styles.buttonText}>
-                {loading ? 'Signing In...' : 'Sign In'}
-              </Text>
+              <LinearGradient
+                colors={[Colors[isDark ? 'dark' : 'light'].tint, Colors[isDark ? 'dark' : 'light'].success]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.buttonGradient}
+              >
+                <Text style={styles.loginButtonText}>
+                  {loading ? 'Logging in...' : 'Login'}
+                </Text>
+              </LinearGradient>
             </TouchableOpacity>
 
             <View style={styles.footer}>
-              <Text style={styles.footerText}>Don't have an account? </Text>
+              <Text style={[styles.footerText, { color: Colors[isDark ? 'dark' : 'light'].textSecondary }]}>
+                Don't have an account?{' '}
+              </Text>
               <Link href="/(auth)/register" asChild>
                 <TouchableOpacity>
-                  <Text style={styles.linkText}>Sign Up</Text>
+                  <Text style={[styles.link, { color: Colors[isDark ? 'dark' : 'light'].tint }]}>
+                    Sign Up
+                  </Text>
                 </TouchableOpacity>
               </Link>
             </View>
-          </View>
-        </ScrollView>
+          </BlurView>
+        </Animatable.View>
       </KeyboardAvoidingView>
     </LinearGradient>
   );
@@ -197,47 +179,52 @@ const styles = StyleSheet.create({
   },
   keyboardView: {
     flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
     justifyContent: 'center',
     padding: 20,
   },
-  header: {
+  logoContainer: {
     alignItems: 'center',
     marginBottom: 40,
   },
+  iconContainer: {
+    position: 'relative',
+    width: 120,
+    height: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconGlow: {
+    position: 'absolute',
+    top: -20,
+    left: -20,
+    right: -20,
+    bottom: -20,
+    borderRadius: 80,
+    opacity: 0.5,
+  },
   title: {
     fontSize: 32,
-    fontWeight: 'bold',
-    color: 'white',
-    marginBottom: 8,
+    fontFamily: 'SpaceMono',
+    marginTop: 20,
   },
-  subtitle: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
+  formContainer: {
+    width: '100%',
   },
-  form: {
-    backgroundColor: 'white',
+  formBlur: {
+    padding: 20,
     borderRadius: 20,
-    padding: 30,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 10,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 12,
     marginBottom: 16,
     paddingHorizontal: 16,
-    height: 56,
+    height: 50,
   },
   inputIcon: {
     marginRight: 12,
@@ -245,44 +232,38 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-    color: '#333',
+    fontFamily: 'SpaceMono',
   },
-  passwordInput: {
-    paddingRight: 40,
-  },
-  eyeIcon: {
-    position: 'absolute',
-    right: 16,
-    padding: 4,
-  },
-  button: {
-    backgroundColor: '#667eea',
+  loginButton: {
+    height: 50,
     borderRadius: 12,
-    height: 56,
+    overflow: 'hidden',
+    marginTop: 16,
+  },
+  buttonGradient: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 8,
   },
   buttonDisabled: {
-    opacity: 0.6,
+    opacity: 0.7,
   },
-  buttonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: '600',
+  loginButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: 'SpaceMono',
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 24,
+    marginTop: 20,
   },
   footerText: {
-    color: '#666',
-    fontSize: 16,
+    fontSize: 14,
+    fontFamily: 'SpaceMono',
   },
-  linkText: {
-    color: '#667eea',
-    fontSize: 16,
-    fontWeight: '600',
+  link: {
+    fontSize: 14,
+    fontFamily: 'SpaceMono',
   },
 });
