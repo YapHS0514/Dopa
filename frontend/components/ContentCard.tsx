@@ -1,298 +1,245 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
+  Dimensions,
+  Pressable,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { apiClient } from '../lib/api';
+import { useStore } from '../lib/store';
+import { Colors } from '../constants/Colors';
+import { Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import * as Animatable from 'react-native-animatable';
 
-interface Content {
-  id: string;
-  title: string;
-  summary: string;
-  content_type: string;
-  tags: string[];
-  difficulty_level: number;
-  estimated_read_time: number;
-  topics: {
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_WIDTH = SCREEN_WIDTH - 40; // 20px padding on each side
+
+type ContentCardProps = {
+  content: {
     id: string;
-    name: string;
-    color: string;
-    icon: string;
-  }[];
-}
-
-interface ContentCardProps {
-  content: Content;
+    title: string;
+    summary: string;
+    content_type: string;
+    tags: string[];
+    difficulty_level: number;
+    estimated_read_time: number;
+    topics: Array<{
+      id: string;
+      name: string;
+      color: string;
+      icon: string;
+    }>;
+  };
   onInteraction: (contentId: string, type: string, value: number) => void;
-  isSaved?: boolean;
-  savedContentId?: string;
-  onUnsave?: (savedContentId: string) => void;
-}
+};
 
-export function ContentCard({ 
-  content, 
-  onInteraction, 
-  isSaved = false, 
-  savedContentId,
-  onUnsave 
-}: ContentCardProps) {
-  const [liked, setLiked] = useState(false);
-  const [saved, setSaved] = useState(isSaved);
-  const [loading, setLoading] = useState(false);
+export function ContentCard({ content, onInteraction }: ContentCardProps) {
+  const theme = useStore((state) => state.theme);
+  const isDark = theme === 'dark';
 
-  const handleLike = async () => {
-    if (loading) return;
-    
-    setLoading(true);
-    try {
-      const newLiked = !liked;
-      setLiked(newLiked);
-      await onInteraction(content.id, 'like', newLiked ? 10 : -10);
-    } catch (error) {
-      setLiked(!liked); // Revert on error
-      console.error('Error liking content:', error);
-    } finally {
-      setLoading(false);
-    }
+  const handleLike = () => {
+    onInteraction(content.id, 'like', 1);
   };
 
-  const handleSave = async () => {
-    if (loading) return;
-    
-    setLoading(true);
-    try {
-      if (saved && savedContentId && onUnsave) {
-        // Unsave content
-        await onUnsave(savedContentId);
-        setSaved(false);
-      } else {
-        // Save content
-        await apiClient.saveContent(content.id);
-        setSaved(true);
-        await onInteraction(content.id, 'save', 5);
-      }
-    } catch (error: any) {
-      console.error('Error saving content:', error);
-      if (error.message.includes('409')) {
-        // Already saved
-        setSaved(true);
-      } else {
-        Alert.alert('Error', 'Failed to save content');
-      }
-    } finally {
-      setLoading(false);
-    }
+  const handleSave = () => {
+    onInteraction(content.id, 'save', 1);
   };
 
-  const handleView = async () => {
-    await onInteraction(content.id, 'view', 1);
-  };
-
-  const getDifficultyColor = (level: number) => {
-    switch (level) {
-      case 1: return '#10B981'; // Easy - Green
-      case 2: return '#F59E0B'; // Medium - Yellow
-      case 3: return '#EF4444'; // Hard - Red
-      default: return '#6B7280'; // Default - Gray
-    }
-  };
-
-  const getDifficultyText = (level: number) => {
-    switch (level) {
-      case 1: return 'Easy';
-      case 2: return 'Medium';
-      case 3: return 'Hard';
-      default: return 'Unknown';
-    }
+  const handleShare = () => {
+    onInteraction(content.id, 'share', 1);
   };
 
   return (
-    <TouchableOpacity style={styles.card} onPress={handleView} activeOpacity={0.9}>
-      <View style={styles.header}>
-        <View style={styles.topicInfo}>
-          {content.topics && content.topics[0] && (
-            <>
-              <View style={[styles.topicIcon, { backgroundColor: content.topics[0].color }]}>
-                <Ionicons name={content.topics[0].icon as any} size={16} color="white" />
-              </View>
-              <Text style={styles.topicName}>{content.topics[0].name}</Text>
-            </>
-          )}
-        </View>
-        <View style={styles.metadata}>
-          <View style={[styles.difficultyBadge, { backgroundColor: getDifficultyColor(content.difficulty_level) }]}>
-            <Text style={styles.difficultyText}>{getDifficultyText(content.difficulty_level)}</Text>
-          </View>
-          <Text style={styles.readTime}>{content.estimated_read_time}s</Text>
-        </View>
-      </View>
-
-      <Text style={styles.title}>{content.title}</Text>
-      <Text style={styles.summary}>{content.summary}</Text>
-
-      {content.tags.length > 0 && (
-        <View style={styles.tagsContainer}>
-          {content.tags.slice(0, 3).map((tag, index) => (
-            <View key={index} style={styles.tag}>
-              <Text style={styles.tagText}>#{tag}</Text>
+    <Animatable.View
+      animation="fadeInUp"
+      style={styles.container}
+    >
+      <BlurView
+        intensity={100}
+        tint={isDark ? 'dark' : 'light'}
+        style={styles.cardBlur}
+      >
+        <LinearGradient
+          colors={[
+            `${content.topics[0].color}20`,
+            'transparent'
+          ]}
+          style={styles.cardGradient}
+        >
+          <View style={styles.header}>
+            <View style={styles.topicContainer}>
+              <Text style={styles.topicIcon}>{content.topics[0].icon}</Text>
+              <Text style={[
+                styles.topicText,
+                { color: content.topics[0].color }
+              ]}>
+                {content.topics[0].name}
+              </Text>
             </View>
-          ))}
-        </View>
-      )}
+            <View style={styles.metaContainer}>
+              <View style={styles.metaItem}>
+                <Feather
+                  name="clock"
+                  size={12}
+                  color={Colors[isDark ? 'dark' : 'light'].textSecondary}
+                />
+                <Text style={[
+                  styles.metaText,
+                  { color: Colors[isDark ? 'dark' : 'light'].textSecondary }
+                ]}>
+                  {content.estimated_read_time}m
+                </Text>
+              </View>
+              <View style={styles.metaItem}>
+                <Feather
+                  name="bar-chart-2"
+                  size={12}
+                  color={Colors[isDark ? 'dark' : 'light'].textSecondary}
+                />
+                <Text style={[
+                  styles.metaText,
+                  { color: Colors[isDark ? 'dark' : 'light'].textSecondary }
+                ]}>
+                  Level {content.difficulty_level}
+                </Text>
+              </View>
+            </View>
+          </View>
 
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={[styles.actionButton, liked && styles.actionButtonActive]}
-          onPress={handleLike}
-          disabled={loading}
-        >
-          <Ionicons
-            name={liked ? 'heart' : 'heart-outline'}
-            size={20}
-            color={liked ? '#EF4444' : '#666'}
-          />
-          <Text style={[styles.actionText, liked && styles.actionTextActive]}>
-            Like
+          <Text style={[
+            styles.title,
+            { color: Colors[isDark ? 'dark' : 'light'].text }
+          ]}>
+            {content.title}
           </Text>
-        </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.actionButton, saved && styles.actionButtonActive]}
-          onPress={handleSave}
-          disabled={loading}
-        >
-          <Ionicons
-            name={saved ? 'bookmark' : 'bookmark-outline'}
-            size={20}
-            color={saved ? '#667eea' : '#666'}
-          />
-          <Text style={[styles.actionText, saved && styles.actionTextActive]}>
-            {saved ? 'Saved' : 'Save'}
+          <Text style={[
+            styles.summary,
+            { color: Colors[isDark ? 'dark' : 'light'].textSecondary }
+          ]}>
+            {content.summary}
           </Text>
-        </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButton}>
-          <Ionicons name="share-outline" size={20} color="#666" />
-          <Text style={styles.actionText}>Share</Text>
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
+          <View style={styles.footer}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={handleLike}
+            >
+              <Feather
+                name="heart"
+                size={24}
+                color={Colors[isDark ? 'dark' : 'light'].tint}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={handleSave}
+            >
+              <Feather
+                name="bookmark"
+                size={24}
+                color={Colors[isDark ? 'dark' : 'light'].tint}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={handleShare}
+            >
+              <Feather
+                name="share-2"
+                size={24}
+                color={Colors[isDark ? 'dark' : 'light'].tint}
+              />
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+      </BlurView>
+    </Animatable.View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: 'white',
-    borderRadius: 16,
+  container: {
+    width: CARD_WIDTH,
+    height: 300,
+    marginBottom: 20,
+  },
+  cardBlur: {
+    flex: 1,
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  cardGradient: {
+    flex: 1,
     padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-  },
-  topicInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  topicIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  topicName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-  },
-  metadata: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  difficultyBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 8,
-  },
-  difficultyText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: 'white',
-  },
-  readTime: {
-    fontSize: 12,
-    color: '#666',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-    lineHeight: 24,
-  },
-  summary: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  tagsContainer: {
-    flexDirection: 'row',
     marginBottom: 16,
   },
-  tag: {
-    backgroundColor: '#f0f0f0',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginRight: 8,
-  },
-  tagText: {
-    fontSize: 12,
-    color: '#666',
-  },
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-  },
-  actionButton: {
+  topicContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 20,
   },
-  actionButtonActive: {
-    backgroundColor: '#f8f9ff',
+  topicIcon: {
+    fontSize: 16,
+    marginRight: 6,
   },
-  actionText: {
+  topicText: {
     fontSize: 14,
-    color: '#666',
-    marginLeft: 4,
+    fontFamily: 'SpaceMono',
   },
-  actionTextActive: {
-    color: '#333',
-    fontWeight: '600',
+  metaContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metaText: {
+    fontSize: 12,
+    fontFamily: 'SpaceMono',
+  },
+  title: {
+    fontSize: 24,
+    fontFamily: 'SpaceMono',
+    marginBottom: 8,
+  },
+  summary: {
+    fontSize: 16,
+    fontFamily: 'SpaceMono',
+    lineHeight: 24,
+    flex: 1,
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+  },
+  actionButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
