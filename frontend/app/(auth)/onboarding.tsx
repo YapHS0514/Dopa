@@ -1,280 +1,273 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
+  TouchableOpacity,
   ScrollView,
-  Alert,
-  ActivityIndicator,
+  Dimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { apiClient } from '../../lib/api';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../lib/supabase';
+import { router } from 'expo-router';
+import * as Animatable from 'react-native-animatable';
+import { Feather } from '@expo/vector-icons';
+import { useStore } from '../../lib/store';
+import { Colors } from '../../constants/Colors';
+import { TOPICS } from '../../constants/MockData';
 
-interface Topic {
-  id: string;
-  name: string;
-  description: string;
-  color: string;
-  icon: string;
-}
-
-const SAMPLE_TOPICS: Topic[] = [
-  {
-    id: '1',
-    name: 'Technology',
-    description: 'Latest tech trends',
-    color: '#3B82F6',
-    icon: 'phone-portrait-outline',
-  },
-  {
-    id: '2',
-    name: 'Science',
-    description: 'Scientific discoveries',
-    color: '#10B981',
-    icon: 'flask-outline',
-  },
-  {
-    id: '3',
-    name: 'History',
-    description: 'Historical events',
-    color: '#F59E0B',
-    icon: 'library-outline',
-  },
-  {
-    id: '4',
-    name: 'Sports',
-    description: 'Sports and fitness',
-    color: '#EF4444',
-    icon: 'trophy-outline',
-  },
-  {
-    id: '5',
-    name: 'Health',
-    description: 'Wellness and health',
-    color: '#EC4899',
-    icon: 'heart-outline',
-  },
-  {
-    id: '6',
-    name: 'Business',
-    description: 'Business insights',
-    color: '#6366F1',
-    icon: 'briefcase-outline',
-  },
+const AGE_GROUPS = [
+  { id: '8-12', label: '8-12 years' },
+  { id: '13-17', label: '13-17 years' },
+  { id: '18-25', label: '18-25 years' },
 ];
 
+const { width } = Dimensions.get('window');
+const TOPIC_ITEM_WIDTH = (width - 48) / 2;
+
 export default function OnboardingScreen() {
-  const router = useRouter();
-  const { user } = useAuth();
-  const [topics, setTopics] = useState<Topic[]>([]);
+  const [step, setStep] = useState(1);
+  const [selectedAgeGroup, setSelectedAgeGroup] = useState<string | null>(null);
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const theme = useStore((state) => state.theme);
+  const updateUserProfile = useStore((state) => state.updateUserProfile);
+  const isDark = theme === 'dark';
 
-  useEffect(() => {
-    fetchTopics();
-  }, []);
-
-  const fetchTopics = async () => {
-    try {
-      const response = await apiClient.get<{ data: Topic[] }>('/api/topics');
-      setTopics(response.data || []);
-    } catch (error) {
-      console.error('Error fetching topics:', error);
-      Alert.alert('Error', 'Failed to load topics. Please try again.');
-      // Fallback to sample topics if API fails
-      setTopics(SAMPLE_TOPICS);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const toggleTopic = (topicId: string) => {
+  const handleTopicToggle = useCallback((topicId: string) => {
     setSelectedTopics((prev) =>
       prev.includes(topicId)
         ? prev.filter((id) => id !== topicId)
         : [...prev, topicId]
     );
-  };
+  }, []);
 
-  const handleComplete = async () => {
-    if (selectedTopics.length === 0) {
-      Alert.alert('Error', 'Please select at least one topic');
-      return;
-    }
-
-    try {
-      const preferences = selectedTopics.map((topicId) => ({
-        topic_id: topicId,
-        points: 50,
-      }));
-
-      console.log('Sending preferences:', preferences);
-      await apiClient.post('/api/user/preferences', preferences);
-      // Update onboarding status
-      await apiClient.post('/api/user/onboarding-complete', {});
-
+  const handleNext = useCallback(() => {
+    if (step === 1 && selectedAgeGroup) {
+      setStep(2);
+    } else if (step === 2 && selectedTopics.length >= 5) {
+      updateUserProfile({
+        age_group: selectedAgeGroup as '8-12' | '13-17' | '18-25',
+        selected_topics: selectedTopics,
+      });
       router.replace('/(tabs)');
-    } catch (error) {
-      console.error('Onboarding error:', error);
-      Alert.alert('Error', 'Failed to save preferences. Please try again.');
     }
-  };
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0000ff" />
-      </View>
-    );
-  }
+  }, [step, selectedAgeGroup, selectedTopics, updateUserProfile]);
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Choose Your Topics</Text>
-        <Text style={styles.subtitle}>
-          Select the topics you're interested in
-        </Text>
-      </View>
-
-      <View style={styles.topicsGrid}>
-        {topics.map((topic) => (
-          <TouchableOpacity
-            key={topic.id}
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: Colors[isDark ? 'dark' : 'light'].background },
+      ]}>
+      {step === 1 ? (
+        <Animatable.View animation="fadeIn" style={styles.stepContainer}>
+          <Text
             style={[
-              styles.topicCard,
-              { backgroundColor: topic.color },
-              selectedTopics.includes(topic.id) && styles.selectedTopic,
-            ]}
-            onPress={() => toggleTopic(topic.id)}
-          >
-            <Ionicons
-              name={topic.icon as any}
-              size={24}
-              color="white"
-              style={styles.topicIcon}
-            />
-            <Text style={styles.topicName}>{topic.name}</Text>
-            <Text style={styles.topicDescription}>{topic.description}</Text>
-            {selectedTopics.includes(topic.id) && (
-              <View style={styles.checkmarkContainer}>
-                <Ionicons name="checkmark-circle" size={24} color="white" />
-              </View>
-            )}
-          </TouchableOpacity>
-        ))}
-      </View>
+              styles.title,
+              { color: Colors[isDark ? 'dark' : 'light'].text },
+            ]}>
+            What's your age group?
+          </Text>
+          <Text
+            style={[
+              styles.subtitle,
+              { color: Colors[isDark ? 'dark' : 'light'].text },
+            ]}>
+            We'll customize content for your age group
+          </Text>
+
+          <View style={styles.optionsContainer}>
+            {AGE_GROUPS.map((group) => (
+              <TouchableOpacity
+                key={group.id}
+                style={[
+                  styles.ageOption,
+                  {
+                    backgroundColor:
+                      selectedAgeGroup === group.id
+                        ? Colors[isDark ? 'dark' : 'light'].tint
+                        : Colors[isDark ? 'dark' : 'light'].background,
+                    borderColor: Colors[isDark ? 'dark' : 'light'].border,
+                  },
+                ]}
+                onPress={() => setSelectedAgeGroup(group.id)}>
+                <Text
+                  style={[
+                    styles.ageOptionText,
+                    {
+                      color:
+                        selectedAgeGroup === group.id
+                          ? '#fff'
+                          : Colors[isDark ? 'dark' : 'light'].text,
+                    },
+                  ]}>
+                  {group.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Animatable.View>
+      ) : (
+        <Animatable.View animation="fadeIn" style={styles.stepContainer}>
+          <Text
+            style={[
+              styles.title,
+              { color: Colors[isDark ? 'dark' : 'light'].text },
+            ]}>
+            Choose your interests
+          </Text>
+          <Text
+            style={[
+              styles.subtitle,
+              { color: Colors[isDark ? 'dark' : 'light'].text },
+            ]}>
+            Select at least 5 topics you'd like to learn about
+          </Text>
+
+          <ScrollView
+            style={styles.topicsContainer}
+            showsVerticalScrollIndicator={false}>
+            <View style={styles.topicsGrid}>
+              {TOPICS.map((topic) => (
+                <TouchableOpacity
+                  key={topic.id}
+                  style={[
+                    styles.topicItem,
+                    {
+                      backgroundColor: selectedTopics.includes(topic.id)
+                        ? Colors[isDark ? 'dark' : 'light'].tint
+                        : Colors[isDark ? 'dark' : 'light'].background,
+                      borderColor: Colors[isDark ? 'dark' : 'light'].border,
+                    },
+                  ]}
+                  onPress={() => handleTopicToggle(topic.id)}>
+                  <Text style={styles.topicIcon}>{topic.icon}</Text>
+                  <Text
+                    style={[
+                      styles.topicName,
+                      {
+                        color: selectedTopics.includes(topic.id)
+                          ? '#fff'
+                          : Colors[isDark ? 'dark' : 'light'].text,
+                      },
+                    ]}>
+                    {topic.name}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.topicDescription,
+                      {
+                        color: selectedTopics.includes(topic.id)
+                          ? 'rgba(255, 255, 255, 0.8)'
+                          : Colors[isDark ? 'dark' : 'light'].textSecondary,
+                      },
+                    ]}>
+                    {topic.description}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
+        </Animatable.View>
+      )}
 
       <TouchableOpacity
         style={[
-          styles.confirmButton,
-          selectedTopics.length === 0 && styles.disabledButton,
+          styles.nextButton,
+          {
+            backgroundColor:
+              (step === 1 && selectedAgeGroup) ||
+              (step === 2 && selectedTopics.length >= 5)
+                ? Colors[isDark ? 'dark' : 'light'].tint
+                : Colors[isDark ? 'dark' : 'light'].buttonDisabled,
+          },
         ]}
-        onPress={handleComplete}
-        disabled={selectedTopics.length === 0}
-      >
-        <Text style={styles.confirmButtonText}>
-          {selectedTopics.length > 0
-            ? `Confirm (${selectedTopics.length} selected)`
-            : 'Select at least one topic'}
+        disabled={
+          (step === 1 && !selectedAgeGroup) ||
+          (step === 2 && selectedTopics.length < 5)
+        }
+        onPress={handleNext}>
+        <Text style={styles.nextButtonText}>
+          {step === 1 ? 'Next' : 'Get Started'}
         </Text>
+        <Feather name="arrow-right" size={20} color="#fff" />
       </TouchableOpacity>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  header: {
     padding: 20,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+  },
+  stepContainer: {
+    flex: 1,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 28,
+    fontFamily: 'SpaceMono',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
+    opacity: 0.8,
+    marginBottom: 32,
+  },
+  optionsContainer: {
+    gap: 16,
+  },
+  ageOption: {
+    padding: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  ageOptionText: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  topicsContainer: {
+    flex: 1,
   },
   topicsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    padding: 10,
-    justifyContent: 'space-between',
+    gap: 12,
+    paddingBottom: 100,
   },
-  topicCard: {
-    width: '48%',
-    aspectRatio: 1,
-    marginBottom: 15,
+  topicItem: {
+    width: TOPIC_ITEM_WIDTH,
+    padding: 16,
     borderRadius: 12,
-    padding: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  selectedTopic: {
-    borderWidth: 2,
-    borderColor: 'white',
+    borderWidth: 1,
   },
   topicIcon: {
-    marginBottom: 10,
+    fontSize: 32,
+    marginBottom: 8,
   },
   topicName: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 5,
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
   },
   topicDescription: {
-    color: 'white',
     fontSize: 12,
-    textAlign: 'center',
-    opacity: 0.9,
+    lineHeight: 16,
   },
-  checkmarkContainer: {
+  nextButton: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-  },
-  confirmButton: {
-    backgroundColor: '#007AFF',
-    margin: 20,
-    padding: 15,
-    borderRadius: 10,
+    bottom: 20,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 12,
+    gap: 8,
   },
-  disabledButton: {
-    backgroundColor: '#ccc',
-  },
-  confirmButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
+  nextButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
   },
 });
