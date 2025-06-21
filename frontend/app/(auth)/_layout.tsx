@@ -1,45 +1,41 @@
-import { Stack } from 'expo-router';
-import { useColorScheme } from 'react-native';
+import { Stack, Redirect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
-import { useStore } from '../../lib/store';
+import { useAuth } from '../../hooks/useAuth';
 
 export default function AuthLayout() {
-  const colorScheme = useColorScheme();
-  const theme = useStore((state) => state.theme);
-  const isDark = theme === 'dark' || colorScheme === 'dark';
+  const { user } = useAuth();
+
+  // If user is authenticated, redirect to home
+  if (user) {
+    return <Redirect href="/(tabs)/" />;
+  }
 
   return (
     <Stack
       screenOptions={{
-        headerStyle: {
-          backgroundColor: Colors[isDark ? 'dark' : 'light'].background,
+        headerShown: false,
+        contentStyle: {
+          backgroundColor: Colors.primary,
         },
-        headerTintColor: Colors[isDark ? 'dark' : 'light'].text,
-        headerTitleStyle: {
-          fontFamily: 'SpaceMono',
-        },
-        headerShadowVisible: false,
-      }}>
+        animation: 'fade',
+      }}
+    >
       <Stack.Screen
         name="login"
         options={{
-          title: 'Welcome to Dopa',
-          headerShown: false,
+          title: 'Sign In',
         }}
       />
       <Stack.Screen
         name="register"
         options={{
           title: 'Create Account',
-          headerShown: false,
         }}
       />
       <Stack.Screen
         name="onboarding"
         options={{
-          title: 'Customize Your Experience',
-          headerShown: false,
-          gestureEnabled: false,
+          title: 'Welcome to Dopa',
         }}
       />
     </Stack>

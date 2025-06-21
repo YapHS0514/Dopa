@@ -45,22 +45,23 @@ export default function ProgressScreen() {
   const renderBadge = (badge: typeof MOCK_DATA.badges[0]) => (
     <TouchableOpacity
       key={badge.id}
-      style={[styles.badge, { backgroundColor: Colors[isDark ? 'dark' : 'light'].cardBackground }]}
+      style={[styles.badge, { backgroundColor: Colors.cardBackground }]}
     >
       <Text style={styles.badgeIcon}>{badge.icon}</Text>
-      <Text style={[styles.badgeName, { color: Colors[isDark ? 'dark' : 'light'].text }]}>
+      <Text style={[styles.badgeName, { color: Colors.textPrimary }]}>
         {badge.name}
       </Text>
     </TouchableOpacity>
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: Colors[isDark ? 'dark' : 'light'].background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: Colors.primary }]}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={[styles.title, { color: Colors[isDark ? 'dark' : 'light'].text }]}>
-            Progress 🔥
+          <Text style={[styles.title, { color: Colors.textPrimary }]}>
+            Progress
           </Text>
+          <Feather name="trending-up" size={24} color={Colors.textPrimary} />
         </View>
 
         <View style={styles.content}>
@@ -73,10 +74,10 @@ export default function ProgressScreen() {
               tint={isDark ? 'dark' : 'light'}
               style={styles.weeklyContent}
             >
-              <Text style={[styles.weeklyTitle, { color: Colors[isDark ? 'dark' : 'light'].text }]}>
+              <Text style={[styles.weeklyTitle, { color: Colors.textPrimary }]}>
                 This Week
               </Text>
-              <Text style={[styles.weeklyStats, { color: Colors[isDark ? 'dark' : 'light'].text }]}>
+              <Text style={[styles.weeklyStats, { color: Colors.textPrimary }]}>
                 You've learned {MOCK_DATA.weeklyFacts} new facts! 🎉
               </Text>
             </BlurView>
@@ -84,17 +85,17 @@ export default function ProgressScreen() {
 
           <View style={styles.levelProgress}>
             <View style={styles.levelHeader}>
-              <Text style={[styles.levelText, { color: Colors[isDark ? 'dark' : 'light'].text }]}>
+              <Text style={[styles.levelText, { color: Colors.textPrimary }]}>
                 Level {MOCK_DATA.level}
               </Text>
-              <Text style={[styles.xpText, { color: Colors[isDark ? 'dark' : 'light'].textSecondary }]}>
+              <Text style={[styles.xpText, { color: Colors.textSecondary }]}>
                 {MOCK_DATA.totalXP} / {MOCK_DATA.nextLevelXP} XP
               </Text>
             </View>
             <View 
               style={[
                 styles.progressBar,
-                { backgroundColor: Colors[isDark ? 'dark' : 'light'].border }
+                { backgroundColor: Colors.secondary }
               ]}
             >
               <LinearGradient
@@ -110,42 +111,42 @@ export default function ProgressScreen() {
           </View>
 
           <View style={styles.statsGrid}>
-            <View style={[styles.statCard, { backgroundColor: Colors[isDark ? 'dark' : 'light'].cardBackground }]}>
+            <View style={[styles.statCard, { backgroundColor: Colors.cardBackground }]}>
               <Text style={styles.statIcon}>🔥</Text>
-              <Text style={[styles.statValue, { color: Colors[isDark ? 'dark' : 'light'].text }]}>
+              <Text style={[styles.statValue, { color: Colors.textPrimary }]}>
                 {MOCK_DATA.currentStreak}
               </Text>
-              <Text style={[styles.statLabel, { color: Colors[isDark ? 'dark' : 'light'].textSecondary }]}>
+              <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
                 Current Streak
               </Text>
             </View>
 
-            <View style={[styles.statCard, { backgroundColor: Colors[isDark ? 'dark' : 'light'].cardBackground }]}>
+            <View style={[styles.statCard, { backgroundColor: Colors.cardBackground }]}>
               <Text style={styles.statIcon}>🧠</Text>
-              <Text style={[styles.statValue, { color: Colors[isDark ? 'dark' : 'light'].text }]}>
+              <Text style={[styles.statValue, { color: Colors.textPrimary }]}>
                 {MOCK_DATA.totalFacts}
               </Text>
-              <Text style={[styles.statLabel, { color: Colors[isDark ? 'dark' : 'light'].textSecondary }]}>
+              <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
                 Total Facts
               </Text>
             </View>
 
-            <View style={[styles.statCard, { backgroundColor: Colors[isDark ? 'dark' : 'light'].cardBackground }]}>
+            <View style={[styles.statCard, { backgroundColor: Colors.cardBackground }]}>
               <Text style={styles.statIcon}>⭐</Text>
-              <Text style={[styles.statValue, { color: Colors[isDark ? 'dark' : 'light'].text }]}>
+              <Text style={[styles.statValue, { color: Colors.textPrimary }]}>
                 {MOCK_DATA.totalXP}
               </Text>
-              <Text style={[styles.statLabel, { color: Colors[isDark ? 'dark' : 'light'].textSecondary }]}>
+              <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
                 Total XP
               </Text>
             </View>
 
-            <View style={[styles.statCard, { backgroundColor: Colors[isDark ? 'dark' : 'light'].cardBackground }]}>
+            <View style={[styles.statCard, { backgroundColor: Colors.cardBackground }]}>
               <Text style={styles.statIcon}>🎖️</Text>
-              <Text style={[styles.statValue, { color: Colors[isDark ? 'dark' : 'light'].text }]}>
+              <Text style={[styles.statValue, { color: Colors.textPrimary }]}>
                 {MOCK_DATA.badges.length}
               </Text>
-              <Text style={[styles.statLabel, { color: Colors[isDark ? 'dark' : 'light'].textSecondary }]}>
+              <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
                 Badges
               </Text>
             </View>
@@ -153,20 +154,20 @@ export default function ProgressScreen() {
 
           <View style={styles.badgesSection}>
             <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: Colors[isDark ? 'dark' : 'light'].text }]}>
+              <Text style={[styles.sectionTitle, { color: Colors.textPrimary }]}>
                 Badges
               </Text>
               <TouchableOpacity 
                 style={styles.viewAllButton}
                 onPress={() => setShowBadgesModal(true)}
               >
-                <Text style={[styles.viewAllText, { color: Colors[isDark ? 'dark' : 'light'].tint }]}>
+                <Text style={[styles.viewAllText, { color: Colors.accent }]}>
                   View All
                 </Text>
                 <Feather 
                   name="chevron-right" 
                   size={16} 
-                  color={Colors[isDark ? 'dark' : 'light'].tint} 
+                  color={Colors.accent}
                 />
               </TouchableOpacity>
             </View>
@@ -192,18 +193,18 @@ export default function ProgressScreen() {
             animation="fadeInUp"
             style={[
               styles.modalContent,
-              { backgroundColor: Colors[isDark ? 'dark' : 'light'].background }
+              { backgroundColor: Colors.primary }
             ]}
           >
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: Colors[isDark ? 'dark' : 'light'].text }]}>
+              <Text style={[styles.modalTitle, { color: Colors.textPrimary }]}>
                 Your Badges
               </Text>
               <TouchableOpacity onPress={() => setShowBadgesModal(false)}>
                 <Feather 
                   name="x" 
                   size={24} 
-                  color={Colors[isDark ? 'dark' : 'light'].text} 
+                  color={Colors.textPrimary}
                 />
               </TouchableOpacity>
             </View>
@@ -215,10 +216,10 @@ export default function ProgressScreen() {
                     <Text style={styles.modalBadgeIconText}>{item.icon}</Text>
                   </View>
                   <View style={styles.modalBadgeInfo}>
-                    <Text style={[styles.modalBadgeName, { color: Colors[isDark ? 'dark' : 'light'].text }]}>
+                    <Text style={[styles.modalBadgeName, { color: Colors.textPrimary }]}>
                       {item.name}
                     </Text>
-                    <Text style={[styles.modalBadgeDescription, { color: Colors[isDark ? 'dark' : 'light'].textSecondary }]}>
+                    <Text style={[styles.modalBadgeDescription, { color: Colors.textSecondary }]}>
                       {item.description}
                     </Text>
                   </View>
@@ -243,11 +244,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     padding: 20,
   },
   title: {
     fontSize: 32,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'Inter-Bold',
   },
   content: {
     paddingHorizontal: 20,

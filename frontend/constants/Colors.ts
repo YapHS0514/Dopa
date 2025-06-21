@@ -6,37 +6,55 @@
 const tintColorLight = '#0a7ea4';
 const tintColorDark = '#fff';
 
+/**
+ * Global color constants for the DOPA app dark theme
+ */
+
 export const Colors = {
-  light: {
-    text: '#000',
-    textSecondary: '#666',
-    background: '#fff',
-    cardBackground: '#fff',
-    tagBackground: '#f0f0f0',
-    tint: '#2f95dc',
-    icon: '#000',
-    tabIconDefault: '#ccc',
-    tabIconSelected: '#2f95dc',
-    border: '#e0e0e0',
-    buttonDisabled: '#ccc',
-    success: '#10B981',
-    warning: '#F59E0B',
-    error: '#EF4444',
-  },
-  dark: {
-    text: '#fff',
-    textSecondary: '#a0a0a0',
-    background: '#000',
-    cardBackground: '#1a1a1a',
-    tagBackground: '#333',
-    tint: '#fff',
-    icon: '#fff',
-    tabIconDefault: '#666',
-    tabIconSelected: '#fff',
-    border: '#333',
-    buttonDisabled: '#333',
-    success: '#059669',
-    warning: '#D97706',
-    error: '#DC2626',
+  // Core colors
+  primary: '#000000',      // Main background
+  secondary: '#1A1A1A',    // Secondary background
+  cardBackground: '#222222', // Card/input background
+  accent: '#0a7ea4',      // Accent color
+  
+  // Text colors
+  textPrimary: '#FFFFFF',  // Main text color
+  textSecondary: '#A0A0A0', // Secondary text color
+  textInput: '#FFFFFF',    // Input text color
+  placeholderText: '#666666', // Placeholder text color
+  
+  // UI Elements
+  buttonBackground: '#0a7ea4',
+  buttonText: '#FFFFFF',
+  inputBorder: '#333333',
+  inputBackground: '#1A1A1A',
+  
+  // Navigation
+  tabBarBackground: '#1A1A1A',
+  tabBarIcon: '#FFFFFF',
+  tabBarIconInactive: '#666666',
+  
+  // Status colors
+  success: '#10B981',
+  warning: '#F59E0B',
+  error: '#EF4444',
+  
+  // Legacy support (do not remove)
+  text: '#FFFFFF',
+  shadow: '#000000',
+  saveBarBackground: '#1A1A1A',
+  saveBarFill: '#FFFFFF',
+  notificationBackground: '#1A1A1A',
+  streakBackground: 'rgba(255, 107, 107, 0.1)',
+  coinsBackground: 'rgba(244, 114, 182, 0.1)',
+  
+  // Topic Colors
+  topics: {
+    Science: '#FF6B6B',
+    Space: '#4ECDC4',
+    Nature: '#A78BFA',
+    Tech: '#10B981',
+    Math: '#F59E0B',
+    Psychology: '#F472B6',
   },
 } as const;

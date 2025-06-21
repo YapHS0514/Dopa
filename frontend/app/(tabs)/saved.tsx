@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
-import { useStore } from '../../lib/store';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
@@ -24,35 +23,32 @@ const MOCK_SAVED_FACTS = [
     fact: 'Your brain uses 20% of the total oxygen in your body.',
     topic: 'Science',
     icon: '🧬',
-    color: '#FF6B6B',
+    color: Colors.topics.Science,
   },
   {
     id: '2',
     fact: 'One day on Venus is longer than one year on Venus.',
     topic: 'Space',
     icon: '🚀',
-    color: '#4ECDC4',
+    color: Colors.topics.Space,
   },
   {
     id: '3',
     fact: 'The ocean contains 97% of Earth\'s water.',
     topic: 'Nature',
     icon: '🌊',
-    color: '#A78BFA',
+    color: Colors.topics.Nature,
   },
   {
     id: '4',
     fact: 'The human brain can process images in as little as 13 milliseconds!',
     topic: 'Psychology',
     icon: '🧠',
-    color: '#F472B6',
+    color: Colors.topics.Psychology,
   },
 ];
 
 export default function SavedScreen() {
-  const theme = useStore((state) => state.theme);
-  const isDark = theme === 'dark';
-
   const renderSavedItem = (item: typeof MOCK_SAVED_FACTS[0]) => (
     <TouchableOpacity
       key={item.id}
@@ -65,11 +61,7 @@ export default function SavedScreen() {
         colors={[`${item.color}20`, 'transparent']}
         style={styles.gridItemGradient}
       >
-        <BlurView
-          intensity={100}
-          tint={isDark ? 'dark' : 'light'}
-          style={styles.gridItemContent}
-        >
+        <View style={styles.gridItemContent}>
           <View style={[styles.topicBadge, { backgroundColor: `${item.color}20` }]}>
             <Text style={styles.topicIcon}>{item.icon}</Text>
             <Text style={[styles.topicText, { color: item.color }]}>
@@ -77,27 +69,27 @@ export default function SavedScreen() {
             </Text>
           </View>
           <Text 
-            style={[styles.factText, { color: Colors[isDark ? 'dark' : 'light'].text }]}
+            style={styles.factText}
             numberOfLines={4}
           >
             {item.fact}
           </Text>
-        </BlurView>
+        </View>
       </LinearGradient>
     </TouchableOpacity>
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: Colors[isDark ? 'dark' : 'light'].background }]}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: Colors[isDark ? 'dark' : 'light'].text }]}>
+        <Text style={styles.title}>
           Saved Facts
         </Text>
-        <View style={[styles.savesCounter, { backgroundColor: Colors[isDark ? 'dark' : 'light'].cardBackground }]}>
-          <Text style={[styles.savesText, { color: Colors[isDark ? 'dark' : 'light'].textSecondary }]}>
+        <View style={styles.savesCounter}>
+          <Text style={styles.savesText}>
             Saves remaining:
           </Text>
-          <Text style={[styles.savesNumber, { color: Colors[isDark ? 'dark' : 'light'].text }]}>
+          <Text style={styles.savesNumber}>
             8/10
           </Text>
         </View>
@@ -119,13 +111,15 @@ export default function SavedScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.primary,
   },
   header: {
     padding: 20,
   },
   title: {
     fontSize: 32,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'Inter-Bold',
+    color: Colors.textPrimary,
     marginBottom: 16,
   },
   savesCounter: {
@@ -134,15 +128,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 16,
     borderRadius: 16,
+    backgroundColor: Colors.cardBackground,
   },
   savesText: {
     fontSize: 16,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'Inter',
+    color: Colors.textSecondary,
   },
   savesNumber: {
     fontSize: 16,
-    fontFamily: 'SpaceMono',
-    fontWeight: '600',
+    fontFamily: 'Inter-Medium',
+    color: Colors.textPrimary,
   },
   scrollView: {
     flex: 1,
@@ -161,6 +157,7 @@ const styles = StyleSheet.create({
     marginBottom: GRID_SPACING,
     borderRadius: 16,
     overflow: 'hidden',
+    backgroundColor: Colors.cardBackground,
   },
   gridItemGradient: {
     flex: 1,
@@ -186,12 +183,13 @@ const styles = StyleSheet.create({
   },
   topicText: {
     fontSize: 12,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'Inter-Medium',
     fontWeight: '600',
   },
   factText: {
     fontSize: 14,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'Inter',
     lineHeight: 20,
+    color: Colors.textPrimary,
   },
 });

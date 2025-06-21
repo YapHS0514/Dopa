@@ -22,27 +22,31 @@ const AGE_GROUPS = [
 
 const { width } = Dimensions.get('window');
 const TOPIC_ITEM_WIDTH = (width - 48) / 2;
+const MAX_TOPICS = 10;
+const MIN_TOPICS = 3;
 
 export default function OnboardingScreen() {
   const [step, setStep] = useState(1);
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<string | null>(null);
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
-  const theme = useStore((state) => state.theme);
   const updateUserProfile = useStore((state) => state.updateUserProfile);
-  const isDark = theme === 'dark';
 
   const handleTopicToggle = useCallback((topicId: string) => {
-    setSelectedTopics((prev) =>
-      prev.includes(topicId)
-        ? prev.filter((id) => id !== topicId)
-        : [...prev, topicId]
-    );
+    setSelectedTopics((prev) => {
+      if (prev.includes(topicId)) {
+        return prev.filter((id) => id !== topicId);
+      }
+      if (prev.length >= MAX_TOPICS) {
+        return prev;
+      }
+      return [...prev, topicId];
+    });
   }, []);
 
   const handleNext = useCallback(() => {
     if (step === 1 && selectedAgeGroup) {
       setStep(2);
-    } else if (step === 2 && selectedTopics.length >= 5) {
+    } else if (step === 2 && selectedTopics.length >= MIN_TOPICS) {
       updateUserProfile({
         age_group: selectedAgeGroup as '8-12' | '13-17' | '18-25',
         selected_topics: selectedTopics,
@@ -52,25 +56,11 @@ export default function OnboardingScreen() {
   }, [step, selectedAgeGroup, selectedTopics, updateUserProfile]);
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: Colors[isDark ? 'dark' : 'light'].background },
-      ]}>
+    <View style={styles.container}>
       {step === 1 ? (
         <Animatable.View animation="fadeIn" style={styles.stepContainer}>
-          <Text
-            style={[
-              styles.title,
-              { color: Colors[isDark ? 'dark' : 'light'].text },
-            ]}>
-            What's your age group?
-          </Text>
-          <Text
-            style={[
-              styles.subtitle,
-              { color: Colors[isDark ? 'dark' : 'light'].text },
-            ]}>
+          <Text style={styles.title}>What's your age group?</Text>
+          <Text style={styles.subtitle}>
             We'll customize content for your age group
           </Text>
 
@@ -80,25 +70,16 @@ export default function OnboardingScreen() {
                 key={group.id}
                 style={[
                   styles.ageOption,
-                  {
-                    backgroundColor:
-                      selectedAgeGroup === group.id
-                        ? Colors[isDark ? 'dark' : 'light'].tint
-                        : Colors[isDark ? 'dark' : 'light'].background,
-                    borderColor: Colors[isDark ? 'dark' : 'light'].border,
-                  },
+                  selectedAgeGroup === group.id && styles.ageOptionSelected,
                 ]}
-                onPress={() => setSelectedAgeGroup(group.id)}>
+                onPress={() => setSelectedAgeGroup(group.id)}
+              >
                 <Text
                   style={[
                     styles.ageOptionText,
-                    {
-                      color:
-                        selectedAgeGroup === group.id
-                          ? '#fff'
-                          : Colors[isDark ? 'dark' : 'light'].text,
-                    },
-                  ]}>
+                    selectedAgeGroup === group.id && styles.ageOptionTextSelected,
+                  ]}
+                >
                   {group.label}
                 </Text>
               </TouchableOpacity>
@@ -107,63 +88,59 @@ export default function OnboardingScreen() {
         </Animatable.View>
       ) : (
         <Animatable.View animation="fadeIn" style={styles.stepContainer}>
-          <Text
-            style={[
-              styles.title,
-              { color: Colors[isDark ? 'dark' : 'light'].text },
-            ]}>
-            Choose your interests
+          <Text style={styles.title}>Choose your interests</Text>
+          <Text style={styles.subtitle}>
+            Select {MIN_TOPICS}-{MAX_TOPICS} topics you'd like to learn about
           </Text>
-          <Text
-            style={[
-              styles.subtitle,
-              { color: Colors[isDark ? 'dark' : 'light'].text },
-            ]}>
-            Select at least 5 topics you'd like to learn about
+          <Text style={styles.topicCount}>
+            {selectedTopics.length} of {MAX_TOPICS} selected
           </Text>
 
           <ScrollView
             style={styles.topicsContainer}
-            showsVerticalScrollIndicator={false}>
+            showsVerticalScrollIndicator={false}
+          >
             <View style={styles.topicsGrid}>
-              {TOPICS.map((topic) => (
-                <TouchableOpacity
-                  key={topic.id}
-                  style={[
-                    styles.topicItem,
-                    {
-                      backgroundColor: selectedTopics.includes(topic.id)
-                        ? Colors[isDark ? 'dark' : 'light'].tint
-                        : Colors[isDark ? 'dark' : 'light'].background,
-                      borderColor: Colors[isDark ? 'dark' : 'light'].border,
-                    },
-                  ]}
-                  onPress={() => handleTopicToggle(topic.id)}>
-                  <Text style={styles.topicIcon}>{topic.icon}</Text>
-                  <Text
+              {TOPICS.map((topic) => {
+                const isSelected = selectedTopics.includes(topic.id);
+                const isDisabled = !isSelected && selectedTopics.length >= MAX_TOPICS;
+                
+                return (
+                  <TouchableOpacity
+                    key={topic.id}
                     style={[
-                      styles.topicName,
-                      {
-                        color: selectedTopics.includes(topic.id)
-                          ? '#fff'
-                          : Colors[isDark ? 'dark' : 'light'].text,
-                      },
-                    ]}>
-                    {topic.name}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.topicDescription,
-                      {
-                        color: selectedTopics.includes(topic.id)
-                          ? 'rgba(255, 255, 255, 0.8)'
-                          : Colors[isDark ? 'dark' : 'light'].textSecondary,
-                      },
-                    ]}>
-                    {topic.description}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                      styles.topicItem,
+                      isSelected && styles.topicItemSelected,
+                      isDisabled && styles.topicItemDisabled,
+                    ]}
+                    onPress={() => handleTopicToggle(topic.id)}
+                    disabled={isDisabled}
+                  >
+                    <Text style={styles.topicIcon}>{topic.icon}</Text>
+                    <Text
+                      style={[
+                        styles.topicName,
+                        isSelected && styles.topicNameSelected,
+                      ]}
+                    >
+                      {topic.name}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.topicDescription,
+                        isSelected && styles.topicDescriptionSelected,
+                      ]}
+                    >
+                      {topic.description}
+                    </Text>
+                    {isSelected && (
+                      <View style={styles.checkmark}>
+                        <Feather name="check" size={16} color="#fff" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </ScrollView>
         </Animatable.View>
@@ -172,19 +149,16 @@ export default function OnboardingScreen() {
       <TouchableOpacity
         style={[
           styles.nextButton,
-          {
-            backgroundColor:
-              (step === 1 && selectedAgeGroup) ||
-              (step === 2 && selectedTopics.length >= 5)
-                ? Colors[isDark ? 'dark' : 'light'].tint
-                : Colors[isDark ? 'dark' : 'light'].buttonDisabled,
-          },
+          ((step === 1 && selectedAgeGroup) ||
+            (step === 2 && selectedTopics.length >= MIN_TOPICS)) &&
+            styles.nextButtonEnabled,
         ]}
         disabled={
           (step === 1 && !selectedAgeGroup) ||
-          (step === 2 && selectedTopics.length < 5)
+          (step === 2 && selectedTopics.length < MIN_TOPICS)
         }
-        onPress={handleNext}>
+        onPress={handleNext}
+      >
         <Text style={styles.nextButtonText}>
           {step === 1 ? 'Next' : 'Get Started'}
         </Text>
@@ -198,19 +172,28 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
+    backgroundColor: Colors.primary,
   },
   stepContainer: {
     flex: 1,
   },
   title: {
     fontSize: 28,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'Inter-Bold',
+    color: Colors.textPrimary,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    opacity: 0.8,
+    fontFamily: 'Inter',
+    color: Colors.textSecondary,
     marginBottom: 32,
+  },
+  topicCount: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: Colors.accent,
+    marginBottom: 16,
   },
   optionsContainer: {
     gap: 16,
@@ -219,11 +202,21 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 12,
     borderWidth: 1,
+    borderColor: Colors.inputBorder,
+    backgroundColor: Colors.cardBackground,
     alignItems: 'center',
+  },
+  ageOptionSelected: {
+    backgroundColor: Colors.accent,
+    borderColor: Colors.accent,
   },
   ageOptionText: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'Inter-Medium',
+    color: Colors.textPrimary,
+  },
+  ageOptionTextSelected: {
+    color: Colors.buttonText,
   },
   topicsContainer: {
     flex: 1,
@@ -239,6 +232,16 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
+    borderColor: Colors.inputBorder,
+    backgroundColor: Colors.cardBackground,
+    position: 'relative',
+  },
+  topicItemSelected: {
+    backgroundColor: Colors.accent,
+    borderColor: Colors.accent,
+  },
+  topicItemDisabled: {
+    opacity: 0.5,
   },
   topicIcon: {
     fontSize: 32,
@@ -246,12 +249,32 @@ const styles = StyleSheet.create({
   },
   topicName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Inter-Medium',
+    color: Colors.textPrimary,
     marginBottom: 4,
+  },
+  topicNameSelected: {
+    color: Colors.buttonText,
   },
   topicDescription: {
     fontSize: 12,
     lineHeight: 16,
+    fontFamily: 'Inter',
+    color: Colors.textSecondary,
+  },
+  topicDescriptionSelected: {
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  checkmark: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   nextButton: {
     position: 'absolute',
@@ -263,11 +286,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 16,
     borderRadius: 12,
+    backgroundColor: Colors.secondary,
     gap: 8,
   },
+  nextButtonEnabled: {
+    backgroundColor: Colors.accent,
+  },
   nextButtonText: {
-    color: '#fff',
+    color: Colors.buttonText,
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'Inter-Medium',
   },
 });
