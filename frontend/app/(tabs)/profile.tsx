@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
   ScrollView,
   Alert,
 } from 'react-native';
@@ -13,15 +12,12 @@ import { useRouter } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { useStore } from '../../lib/store';
 import { useAuth } from '../../hooks/useAuth';
-import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 const MOCK_USER = {
   name: 'John Doe',
   email: 'john@example.com',
-  avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=John',
   joinDate: 'March 2024',
 };
 
@@ -34,8 +30,6 @@ const SETTINGS_OPTIONS = [
 ];
 
 export default function ProfileScreen() {
-  const theme = useStore((state) => state.theme);
-  const isDark = theme === 'dark';
   const router = useRouter();
   const { signOut } = useAuth();
 
@@ -69,7 +63,7 @@ export default function ProfileScreen() {
   const renderSettingItem = (item: typeof SETTINGS_OPTIONS[0]) => (
     <TouchableOpacity
       key={item.id}
-      style={[styles.settingItem, { backgroundColor: Colors[isDark ? 'dark' : 'light'].cardBackground }]}
+      style={[styles.settingItem, { backgroundColor: Colors.cardBackground }]}
       onPress={() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         // Handle setting item press
@@ -77,51 +71,43 @@ export default function ProfileScreen() {
     >
       <View style={styles.settingLeft}>
         <Text style={styles.settingIcon}>{item.icon}</Text>
-        <Text style={[styles.settingTitle, { color: Colors[isDark ? 'dark' : 'light'].text }]}>
+        <Text style={[styles.settingTitle, { color: Colors.textPrimary }]}>
           {item.title}
         </Text>
       </View>
       {item.value && (
         <View style={styles.settingRight}>
-          <Text style={[styles.settingValue, { color: Colors[isDark ? 'dark' : 'light'].textSecondary }]}>
+          <Text style={[styles.settingValue, { color: Colors.textSecondary }]}>
             {item.value}
           </Text>
-          <Feather name="chevron-right" size={20} color={Colors[isDark ? 'dark' : 'light'].textSecondary} />
+          <Feather name="chevron-right" size={20} color={Colors.textSecondary} />
         </View>
       )}
     </TouchableOpacity>
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: Colors[isDark ? 'dark' : 'light'].background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: Colors.primary }]}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <View style={styles.avatarContainer}>
-            <LinearGradient
-              colors={['#FF6B6B', '#4ECDC4']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.avatarGradient}
-            >
-              <Image
-                source={{ uri: MOCK_USER.avatar }}
-                style={styles.avatar}
-              />
-            </LinearGradient>
+            <View style={styles.avatarBackground}>
+              <Feather name="user" size={48} color={Colors.textPrimary} />
+            </View>
           </View>
-          <Text style={[styles.name, { color: Colors[isDark ? 'dark' : 'light'].text }]}>
+          <Text style={[styles.name, { color: Colors.textPrimary }]}>
             {MOCK_USER.name}
           </Text>
-          <Text style={[styles.email, { color: Colors[isDark ? 'dark' : 'light'].textSecondary }]}>
+          <Text style={[styles.email, { color: Colors.textSecondary }]}>
             {MOCK_USER.email}
           </Text>
-          <Text style={[styles.joinDate, { color: Colors[isDark ? 'dark' : 'light'].textSecondary }]}>
+          <Text style={[styles.joinDate, { color: Colors.textSecondary }]}>
             Joined {MOCK_USER.joinDate}
           </Text>
         </View>
 
         <View style={styles.settingsSection}>
-          <Text style={[styles.sectionTitle, { color: Colors[isDark ? 'dark' : 'light'].text }]}>
+          <Text style={[styles.sectionTitle, { color: Colors.textPrimary }]}>
             Settings
           </Text>
           <View style={styles.settingsList}>
@@ -130,7 +116,7 @@ export default function ProfileScreen() {
         </View>
 
         <TouchableOpacity
-          style={[styles.signOutButton, { backgroundColor: Colors[isDark ? 'dark' : 'light'].cardBackground }]}
+          style={[styles.signOutButton, { backgroundColor: Colors.cardBackground }]}
           onPress={handleSignOut}
         >
           <Feather name="log-out" size={20} color="#FF6B6B" />
@@ -159,29 +145,25 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     overflow: 'hidden',
   },
-  avatarGradient: {
+  avatarBackground: {
     flex: 1,
-    padding: 3,
-  },
-  avatar: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 60,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: Colors.cardBackground,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   name: {
     fontSize: 24,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'Inter-Bold',
     marginBottom: 4,
   },
   email: {
     fontSize: 16,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'Inter',
     marginBottom: 8,
   },
   joinDate: {
     fontSize: 14,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'Inter',
     opacity: 0.8,
   },
   settingsSection: {
@@ -190,7 +172,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 20,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'Inter-Bold',
     marginBottom: 16,
   },
   settingsList: {
@@ -215,7 +197,7 @@ const styles = StyleSheet.create({
   },
   settingTitle: {
     fontSize: 16,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'Inter',
   },
   settingRight: {
     flexDirection: 'row',
@@ -223,7 +205,7 @@ const styles = StyleSheet.create({
   },
   settingValue: {
     fontSize: 14,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'Inter',
     marginRight: 8,
   },
   signOutButton: {
@@ -237,7 +219,7 @@ const styles = StyleSheet.create({
   },
   signOutText: {
     fontSize: 16,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'Inter',
     color: '#FF6B6B',
     marginLeft: 8,
   },
