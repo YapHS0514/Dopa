@@ -1,58 +1,86 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
-import { Platform } from 'react-native';
-import { HapticTab } from '../../components/HapticTab';
-import { IconSymbol } from '../../components/ui/IconSymbol';
-import TabBarBackground from '../../components/ui/TabBarBackground';
+import { Tabs, Redirect } from 'expo-router';
+import { Platform, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
-import { useColorScheme } from 'react-native';
+import { usePathname } from 'expo-router';
+import { useAuth } from '../../hooks/useAuth';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const { user } = useAuth();
+  const pathname = usePathname();
+  const isIndexTab = pathname === '/(tabs)/' || pathname === '/(tabs)/index';
+
+  // If not authenticated, redirect to login
+  if (!user) {
+    return <Redirect href="/(auth)/login" />;
+  }
+
+  if (isIndexTab) {
+    return null; // Don't show tab bar on index tab
+  }
 
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
-        tabBarBackground: TabBarBackground,
-        tabBarStyle: Platform.select({
-          ios: {
-            // Use a transparent background on iOS to show the blur effect
+    <View style={{ flex: 1, backgroundColor: Colors.primary }}>
+      <Tabs
+        screenOptions={{
+          tabBarStyle: {
             position: 'absolute',
+            bottom: Platform.OS === 'ios' ? 30 : 20,
+            left: 20,
+            right: 20,
+            height: 65,
+            backgroundColor: Colors.tabBarBackground,
+            borderTopWidth: 0,
+            elevation: 0,
+            borderRadius: 20,
+            overflow: 'hidden',
+            borderWidth: 1,
+            borderColor: Colors.textSecondary,
           },
-          default: {},
-        }),
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          tabBarActiveTintColor: Colors.tabBarIcon,
+          tabBarInactiveTintColor: Colors.tabBarIconInactive,
+          headerShown: false,
+          tabBarLabelStyle: {
+            fontFamily: 'Inter',
+            fontSize: 12,
+            marginBottom: 5,
+          },
+          tabBarIconStyle: {
+            marginTop: 5,
+          },
+          tabBarBackground: () => (
+            <View style={{ flex: 1, backgroundColor: Colors.tabBarBackground }} />
+          ),
         }}
-      />
-      <Tabs.Screen
-        name="discover"
-        options={{
-          title: 'Discover',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="magnifyingglass" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="saved"
-        options={{
-          title: 'Saved',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="bookmark.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
-        }}
-      />
-    </Tabs>
+      >
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: 'Learn',
+            tabBarIcon: ({ color, size }) => (
+              <Feather name="compass" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="saved"
+          options={{
+            title: 'Saved',
+            tabBarIcon: ({ color, size }) => (
+              <Feather name="bookmark" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="progress"
+          options={{
+            title: 'Progress',
+            tabBarIcon: ({ color, size }) => (
+              <Feather name="trending-up" size={size} color={color} />
+            ),
+          }}
+        />
+      </Tabs>
+    </View>
   );
 }

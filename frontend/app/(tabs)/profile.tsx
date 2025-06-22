@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -8,252 +8,120 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
-import { useAuth } from '../../contexts/AuthContext';
-import { apiClient } from '../../lib/api';
-import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { Colors } from '../../constants/Colors';
+import { useStore } from '../../lib/store';
+import { useAuth } from '../../hooks/useAuth';
+import { Feather } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 
-interface UserStats {
-  total_interactions: number;
-  likes_count: number;
-  saves_count: number;
-  views_count: number;
-}
+const MOCK_USER = {
+  name: 'John Doe',
+  email: 'john@example.com',
+  joinDate: 'March 2024',
+};
 
-interface UserPreference {
-  id: string;
-  points: number;
-  preference_score: number;
-  topics: {
-    id: string;
-    name: string;
-    color: string;
-    icon: string;
-  };
-}
-
-interface UserStatsResponse {
-  data: UserStats;
-}
-
-interface UserPreferencesResponse {
-  data: UserPreference[];
-}
+const SETTINGS_OPTIONS = [
+  { id: 'theme', icon: '🎨', title: 'Theme', value: 'Dark' },
+  { id: 'notifications', icon: '🔔', title: 'Notifications', value: 'On' },
+  { id: 'language', icon: '🌍', title: 'Language', value: 'English' },
+  { id: 'feedback', icon: '💭', title: 'Send Feedback', value: '' },
+  { id: 'about', icon: 'ℹ️', title: 'About Dopa', value: 'v1.0.0' },
+];
 
 export default function ProfileScreen() {
-  const { user, signOut, deleteUser } = useAuth();
-  const [stats, setStats] = useState<UserStats | null>(null);
-  const [preferences, setPreferences] = useState<UserPreference[]>([]);
-  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const { signOut } = useAuth();
 
-  const fetchUserData = async () => {
+  const handleSignOut = async () => {
     try {
-      const [statsResponse, preferencesResponse] = await Promise.all([
-        apiClient.getUserStats() as Promise<UserStatsResponse>,
-        apiClient.getUserPreferences() as Promise<UserPreferencesResponse>,
-      ]);
-
-      setStats(statsResponse.data);
-      setPreferences(preferencesResponse.data);
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Alert.alert(
+        'Sign Out',
+        'Are you sure you want to sign out?',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Sign Out',
+            style: 'destructive',
+            onPress: async () => {
+              await signOut();
+              router.replace('/(auth)/login');
+            },
+          },
+        ],
+        { cancelable: true }
+      );
     } catch (error) {
-      console.error('Error fetching user data:', error);
-    } finally {
-      setLoading(false);
+      console.error('Error signing out:', error);
     }
   };
 
-  useEffect(() => {
-    fetchUserData();
-  }, []);
-
-  const handleSignOut = async () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await signOut();
-            router.replace('/(auth)/login');
-          } catch (error) {
-            Alert.alert('Error', 'Failed to sign out');
-          }
-        },
-      },
-    ]);
-  };
-
-  const handleDeleteAccount = async () => {
-    Alert.alert(
-      'Delete Account',
-      'Are you sure you want to delete your account? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteUser();
-              router.replace('/(auth)/login');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete account');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const StatCard = ({
-    title,
-    value,
-    icon,
-  }: {
-    title: string;
-    value: number;
-    icon: string;
-  }) => (
-    <View style={styles.statCard}>
-      <Ionicons name={icon as any} size={24} color="#667eea" />
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statTitle}>{title}</Text>
-    </View>
-  );
-
-  const PreferenceItem = ({ preference }: { preference: UserPreference }) => (
-    <View style={styles.preferenceItem}>
-      {preference.topics && (
-        <>
-          <View
-            style={[
-              styles.preferenceIcon,
-              { backgroundColor: preference.topics.color || '#667eea' },
-            ]}
-          >
-            <Ionicons
-              name={(preference.topics.icon || 'bookmark-outline') as any}
-              size={20}
-              color="white"
-            />
-          </View>
-          <View style={styles.preferenceInfo}>
-            <Text style={styles.preferenceName}>{preference.topics.name || 'Unknown Topic'}</Text>
-            <Text style={styles.preferencePoints}>{preference.points} points</Text>
-          </View>
-        </>
-      )}
-      <View style={styles.preferenceScore}>
-        <View style={styles.scoreBar}>
-          <View
-            style={[
-              styles.scoreProgress,
-              { width: `${(preference.preference_score || 0) * 100}%` },
-            ]}
-          />
-        </View>
+  const renderSettingItem = (item: typeof SETTINGS_OPTIONS[0]) => (
+    <TouchableOpacity
+      key={item.id}
+      style={[styles.settingItem, { backgroundColor: Colors.cardBackground }]}
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        // Handle setting item press
+      }}
+    >
+      <View style={styles.settingLeft}>
+        <Text style={styles.settingIcon}>{item.icon}</Text>
+        <Text style={[styles.settingTitle, { color: Colors.textPrimary }]}>
+          {item.title}
+        </Text>
       </View>
-    </View>
+      {item.value && (
+        <View style={styles.settingRight}>
+          <Text style={[styles.settingValue, { color: Colors.textSecondary }]}>
+            {item.value}
+          </Text>
+          <Feather name="chevron-right" size={20} color={Colors.textSecondary} />
+        </View>
+      )}
+    </TouchableOpacity>
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+    <SafeAreaView style={[styles.container, { backgroundColor: Colors.primary }]}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {user?.user_metadata?.full_name?.charAt(0) ||
-                user?.email?.charAt(0) ||
-                'U'}
-            </Text>
-          </View>
-          <Text style={styles.name}>
-            {user?.user_metadata?.full_name || 'User'}
-          </Text>
-          <Text style={styles.email}>{user?.email}</Text>
-        </View>
-
-        {stats && (
-          <View style={styles.statsSection}>
-            <Text style={styles.sectionTitle}>Your Activity</Text>
-            <View style={styles.statsGrid}>
-              <StatCard
-                title="Total"
-                value={stats.total_interactions}
-                icon="pulse-outline"
-              />
-              <StatCard
-                title="Likes"
-                value={stats.likes_count}
-                icon="heart-outline"
-              />
-              <StatCard
-                title="Saved"
-                value={stats.saves_count}
-                icon="bookmark-outline"
-              />
-              <StatCard
-                title="Views"
-                value={stats.views_count}
-                icon="eye-outline"
-              />
+          <View style={styles.avatarContainer}>
+            <View style={styles.avatarBackground}>
+              <Feather name="user" size={48} color={Colors.textPrimary} />
             </View>
           </View>
-        )}
-
-        {preferences.length > 0 && (
-          <View style={styles.preferencesSection}>
-            <Text style={styles.sectionTitle}>Your Interests</Text>
-            {preferences.map((preference) => (
-              <PreferenceItem key={preference.id} preference={preference} />
-            ))}
-          </View>
-        )}
-
-        <View style={styles.actionsSection}>
-          <TouchableOpacity style={styles.actionButton}>
-            <Ionicons name="settings-outline" size={24} color="#333" />
-            <Text style={styles.actionText}>Settings</Text>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.actionButton}>
-            <Ionicons name="help-circle-outline" size={24} color="#333" />
-            <Text style={styles.actionText}>Help & Support</Text>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.actionButton}>
-            <Ionicons
-              name="information-circle-outline"
-              size={24}
-              color="#333"
-            />
-            <Text style={styles.actionText}>About</Text>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, styles.signOutButton]}
-            onPress={handleSignOut}
-          >
-            <Ionicons name="log-out-outline" size={24} color="#EF4444" />
-            <Text style={[styles.actionText, styles.signOutText]}>
-              Sign Out
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, styles.deleteButton]}
-            onPress={handleDeleteAccount}
-          >
-            <Ionicons name="trash-outline" size={24} color="#EF4444" />
-            <Text style={[styles.actionText, styles.deleteText]}>
-              Delete Account
-            </Text>
-          </TouchableOpacity>
+          <Text style={[styles.name, { color: Colors.textPrimary }]}>
+            {MOCK_USER.name}
+          </Text>
+          <Text style={[styles.email, { color: Colors.textSecondary }]}>
+            {MOCK_USER.email}
+          </Text>
+          <Text style={[styles.joinDate, { color: Colors.textSecondary }]}>
+            Joined {MOCK_USER.joinDate}
+          </Text>
         </View>
+
+        <View style={styles.settingsSection}>
+          <Text style={[styles.sectionTitle, { color: Colors.textPrimary }]}>
+            Settings
+          </Text>
+          <View style={styles.settingsList}>
+            {SETTINGS_OPTIONS.map(renderSettingItem)}
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.signOutButton, { backgroundColor: Colors.cardBackground }]}
+          onPress={handleSignOut}
+        >
+          <Feather name="log-out" size={20} color="#FF6B6B" />
+          <Text style={styles.signOutText}>Sign Out</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -262,145 +130,97 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
   },
-  scrollContent: {
-    paddingBottom: 20,
+  scrollView: {
+    flex: 1,
   },
   header: {
     alignItems: 'center',
-    padding: 20,
-    backgroundColor: 'white',
-    marginBottom: 20,
+    paddingVertical: 30,
   },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#667eea',
-    justifyContent: 'center',
-    alignItems: 'center',
+  avatarContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     marginBottom: 16,
+    overflow: 'hidden',
   },
-  avatarText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: 'white',
+  avatarBackground: {
+    flex: 1,
+    backgroundColor: Colors.cardBackground,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   name: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter-Bold',
     marginBottom: 4,
   },
   email: {
     fontSize: 16,
-    color: '#666',
+    fontFamily: 'Inter',
+    marginBottom: 8,
   },
-  statsSection: {
-    backgroundColor: 'white',
-    padding: 20,
-    marginBottom: 20,
+  joinDate: {
+    fontSize: 14,
+    fontFamily: 'Inter',
+    opacity: 0.8,
+  },
+  settingsSection: {
+    paddingHorizontal: 20,
+    marginBottom: 30,
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter-Bold',
     marginBottom: 16,
   },
-  statsGrid: {
+  settingsList: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  settingItem: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(150, 150, 150, 0.1)',
   },
-  statCard: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  statTitle: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
-  },
-  preferencesSection: {
-    backgroundColor: 'white',
-    padding: 20,
-    marginBottom: 20,
-  },
-  preferenceItem: {
+  settingLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
   },
-  preferenceIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
+  settingIcon: {
+    fontSize: 20,
+    marginRight: 12,
   },
-  preferenceInfo: {
-    flex: 1,
-  },
-  preferenceName: {
+  settingTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
+    fontFamily: 'Inter',
   },
-  preferencePoints: {
+  settingRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  settingValue: {
     fontSize: 14,
-    color: '#666',
-  },
-  preferenceScore: {
-    width: 60,
-  },
-  scoreBar: {
-    height: 4,
-    backgroundColor: '#e0e0e0',
-    borderRadius: 2,
-  },
-  scoreProgress: {
-    height: '100%',
-    backgroundColor: '#10B981',
-    borderRadius: 2,
-  },
-  actionsSection: {
-    backgroundColor: 'white',
-    paddingVertical: 8,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  actionText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-    marginLeft: 16,
+    fontFamily: 'Inter',
+    marginRight: 8,
   },
   signOutButton: {
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 20,
+    marginBottom: 30,
+    padding: 16,
+    borderRadius: 16,
   },
   signOutText: {
-    color: '#EF4444',
-  },
-  deleteButton: {
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-  },
-  deleteText: {
-    color: '#EF4444',
+    fontSize: 16,
+    fontFamily: 'Inter',
+    color: '#FF6B6B',
+    marginLeft: 8,
   },
 });

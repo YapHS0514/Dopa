@@ -1,126 +1,109 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
-  RefreshControl,
-  Alert,
+  ScrollView,
+  TouchableOpacity,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ContentCard } from '../../components/ContentCard';
-import { LoadingSpinner } from '../../components/LoadingSpinner';
-import { apiClient } from '../../lib/api';
+import { Colors } from '../../constants/Colors';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import { Feather } from '@expo/vector-icons';
 
-interface SavedContent {
-  id: string;
-  created_at: string;
-  contents: {
-    id: string;
-    title: string;
-    summary: string;
-    content_type: string;
-    tags: string[];
-    difficulty_level: number;
-    estimated_read_time: number;
-    topics: {
-      id: string;
-      name: string;
-      color: string;
-      icon: string;
-    }[];
-  };
-}
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const GRID_SPACING = 12;
+const GRID_ITEM_WIDTH = (SCREEN_WIDTH - 48 - GRID_SPACING) / 2;
 
-interface SavedContentResponse {
-  data: SavedContent[];
-}
+const MOCK_SAVED_FACTS = [
+  {
+    id: '1',
+    fact: 'Your brain uses 20% of the total oxygen in your body.',
+    topic: 'Science',
+    icon: '🧬',
+    color: Colors.topics.Science,
+  },
+  {
+    id: '2',
+    fact: 'One day on Venus is longer than one year on Venus.',
+    topic: 'Space',
+    icon: '🚀',
+    color: Colors.topics.Space,
+  },
+  {
+    id: '3',
+    fact: 'The ocean contains 97% of Earth\'s water.',
+    topic: 'Nature',
+    icon: '🌊',
+    color: Colors.topics.Nature,
+  },
+  {
+    id: '4',
+    fact: 'The human brain can process images in as little as 13 milliseconds!',
+    topic: 'Psychology',
+    icon: '🧠',
+    color: Colors.topics.Psychology,
+  },
+];
 
 export default function SavedScreen() {
-  const [savedContents, setSavedContents] = useState<SavedContent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const fetchSavedContents = async () => {
-    try {
-      const response = await apiClient.getSavedContent() as SavedContentResponse;
-      setSavedContents(response.data);
-    } catch (error: any) {
-      console.error('Error fetching saved contents:', error);
-      Alert.alert('Error', 'Failed to load saved content');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchSavedContents();
-  }, []);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchSavedContents();
-  };
-
-  const handleInteraction = async (contentId: string, type: string, value: number) => {
-    try {
-      await apiClient.recordInteraction(contentId, type, value);
-    } catch (error) {
-      console.error('Error recording interaction:', error);
-    }
-  };
-
-  const handleUnsave = async (savedContentId: string) => {
-    try {
-      await apiClient.removeSavedContent(savedContentId);
-      setSavedContents(prev => prev.filter(item => item.id !== savedContentId));
-    } catch (error) {
-      console.error('Error removing saved content:', error);
-      Alert.alert('Error', 'Failed to remove saved content');
-    }
-  };
-
-  const renderSavedContent = ({ item }: { item: SavedContent }) => (
-    <ContentCard
-      content={item.contents}
-      onInteraction={handleInteraction}
-      isSaved={true}
-      savedContentId={item.id}
-      onUnsave={handleUnsave}
-    />
+  const renderSavedItem = (item: typeof MOCK_SAVED_FACTS[0]) => (
+    <TouchableOpacity
+      key={item.id}
+      style={styles.gridItem}
+      onPress={() => {
+        // Handle item press
+      }}
+    >
+      <LinearGradient
+        colors={[`${item.color}20`, 'transparent']}
+        style={styles.gridItemGradient}
+      >
+        <View style={styles.gridItemContent}>
+          <View style={[styles.topicBadge, { backgroundColor: `${item.color}20` }]}>
+            <Text style={styles.topicIcon}>{item.icon}</Text>
+            <Text style={[styles.topicText, { color: item.color }]}>
+              {item.topic}
+            </Text>
+          </View>
+          <Text 
+            style={styles.factText}
+            numberOfLines={4}
+          >
+            {item.fact}
+          </Text>
+        </View>
+      </LinearGradient>
+    </TouchableOpacity>
   );
-
-  if (loading) {
-    return <LoadingSpinner />;
-  }
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Saved</Text>
-        <Text style={styles.subtitle}>Your bookmarked content</Text>
-      </View>
-
-      {savedContents.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>No saved content yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Save interesting content to read later
+        <Text style={styles.title}>
+          Saved Facts
+        </Text>
+        <View style={styles.savesCounter}>
+          <Text style={styles.savesText}>
+            Saves remaining:
+          </Text>
+          <Text style={styles.savesNumber}>
+            8/10
           </Text>
         </View>
-      ) : (
-        <FlatList
-          data={savedContents}
-          renderItem={renderSavedContent}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContainer}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+      </View>
+
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.grid}>
+          {MOCK_SAVED_FACTS.map(renderSavedItem)}
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -128,43 +111,85 @@ export default function SavedScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: Colors.primary,
   },
   header: {
     padding: 20,
-    paddingBottom: 10,
   },
   title: {
     fontSize: 32,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
+    fontFamily: 'Inter-Bold',
+    color: Colors.textPrimary,
+    marginBottom: 16,
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-  },
-  listContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
+  savesCounter: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 40,
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: Colors.cardBackground,
   },
-  emptyTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  emptySubtitle: {
+  savesText: {
     fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 22,
+    fontFamily: 'Inter',
+    color: Colors.textSecondary,
+  },
+  savesNumber: {
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
+    color: Colors.textPrimary,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  gridItem: {
+    width: GRID_ITEM_WIDTH,
+    height: GRID_ITEM_WIDTH * 1.2,
+    marginBottom: GRID_SPACING,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: Colors.cardBackground,
+  },
+  gridItemGradient: {
+    flex: 1,
+    padding: 1,
+  },
+  gridItemContent: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 16,
+  },
+  topicBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  topicIcon: {
+    fontSize: 16,
+    marginRight: 4,
+  },
+  topicText: {
+    fontSize: 12,
+    fontFamily: 'Inter-Medium',
+    fontWeight: '600',
+  },
+  factText: {
+    fontSize: 14,
+    fontFamily: 'Inter',
+    lineHeight: 20,
+    color: Colors.textPrimary,
   },
 });
