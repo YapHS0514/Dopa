@@ -1,4 +1,3 @@
-import { supabase } from './supabase';
 import Constants from 'expo-constants';
 import axios, { AxiosInstance } from 'axios';
 import { Platform } from 'react-native';
@@ -28,6 +27,26 @@ console.log('API URL configured as:', API_URL); // Debug log
 interface ApiError {
   detail: string;
   status?: number;
+}
+
+interface UserProfile {
+  id: string;
+  user_id: string;
+  email: string;
+  full_name?: string;
+  avatar_url?: string;
+  total_points: number;
+  streak_days: number;
+  last_active: string;
+  onboarding_completed: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface UserResponse {
+  id: string;
+  email: string;
+  profile: UserProfile;
 }
 
 class ApiClient {
@@ -93,7 +112,15 @@ class ApiClient {
         url: error.config?.url,
         data: error.response?.data
       });
-      throw new Error(error.response?.data?.detail || error.message);
+
+      // Handle specific error cases
+      if (error.response?.status === 429) {
+        throw new Error('Too many attempts. Please try again later.');
+      }
+
+      // Use the error detail from the backend if available
+      const errorMessage = error.response?.data?.detail || error.message;
+      throw new Error(errorMessage);
     }
   }
 
@@ -108,18 +135,15 @@ class ApiClient {
     return this.handleRequest<T>(this.axiosInstance.post(endpoint, data));
   }
 
-  async delete<T>(endpoint: string): Promise<T> {
-    console.log('Making DELETE request to:', endpoint);
-    return this.handleRequest<T>(this.axiosInstance.delete(endpoint));
+  async put<T>(endpoint: string, data: any): Promise<T> {
+    console.log('Making PUT request to:', endpoint);
+    console.log('Request data:', data);
+    return this.handleRequest<T>(this.axiosInstance.put(endpoint, data));
   }
 
   async delete<T>(endpoint: string): Promise<T> {
     console.log('Making DELETE request to:', endpoint);
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      method: 'DELETE',
-      headers: this.getHeaders(),
-    });
-    return this.handleResponse<T>(response);
+    return this.handleRequest<T>(this.axiosInstance.delete(endpoint));
   }
 
   // Content methods
@@ -187,6 +211,27 @@ class ApiClient {
     estimated_read_time?: number;
   }) {
     return this.post('/api/contents', content);
+  }
+
+  // Add these new auth methods before the existing methods
+  async signUp(email: string, password: string): Promise<UserResponse> {
+    return this.post('/api/auth/signup', { email, password });
+  }
+
+  async signIn(email: string, password: string): Promise<UserResponse> {
+    return this.post('/api/auth/signin', { email, password });
+  }
+
+  async signOut(): Promise<void> {
+    return this.post('/api/auth/signout', {});
+  }
+
+  async getProfile(): Promise<UserProfile> {
+    return this.get('/api/auth/profile');
+  }
+
+  async completeOnboarding(): Promise<void> {
+    return this.put('/api/auth/profile/onboarding', {});
   }
 }
 

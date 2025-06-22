@@ -33,7 +33,7 @@ export default function LoginScreen() {
     try {
       setLoading(true);
       await signIn(email, password);
-      router.replace('/(tabs)/');
+      // Navigation is now handled inside signIn based on onboarding status
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to sign in');
     } finally {
@@ -42,7 +42,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={[GlobalStyles.screenContainer, styles.container]}
     >
@@ -51,10 +51,15 @@ export default function LoginScreen() {
           <Text style={[GlobalStyles.heading, styles.title]}>Welcome Back</Text>
           <Text style={styles.subtitle}>Sign in to continue learning</Text>
         </View>
-        
+
         <View style={styles.form}>
           <View style={styles.inputContainer}>
-            <Feather name="mail" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+            <Feather
+              name="mail"
+              size={20}
+              color={Colors.textSecondary}
+              style={styles.inputIcon}
+            />
             <TextInput
               style={styles.input}
               placeholder="Email"
@@ -66,9 +71,14 @@ export default function LoginScreen() {
               autoComplete="email"
             />
           </View>
-          
+
           <View style={styles.inputContainer}>
-            <Feather name="lock" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+            <Feather
+              name="lock"
+              size={20}
+              color={Colors.textSecondary}
+              style={styles.inputIcon}
+            />
             <TextInput
               style={[styles.input, styles.passwordInput]}
               placeholder="Password"
@@ -78,19 +88,19 @@ export default function LoginScreen() {
               secureTextEntry={!showPassword}
               autoComplete="password"
             />
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => setShowPassword(!showPassword)}
               style={styles.eyeIcon}
             >
-              <Feather 
-                name={showPassword ? "eye-off" : "eye"} 
-                size={20} 
-                color={Colors.textSecondary} 
+              <Feather
+                name={showPassword ? 'eye-off' : 'eye'}
+                size={20}
+                color={Colors.textSecondary}
               />
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
             onPress={handleLogin}
             disabled={loading}
@@ -102,7 +112,7 @@ export default function LoginScreen() {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.linkButton}
             onPress={() => router.push('/register')}
           >

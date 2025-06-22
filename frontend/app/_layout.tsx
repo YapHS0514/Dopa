@@ -16,7 +16,7 @@ import {
 export default function RootLayout() {
   const [showSplash, setShowSplash] = useState(true);
   const [loaded] = useFonts({
-    'Inter': Inter_400Regular,
+    Inter: Inter_400Regular,
     'Inter-Medium': Inter_500Medium,
     'Inter-Bold': Inter_700Bold,
   });
@@ -49,32 +49,35 @@ export default function RootLayout() {
               animation: 'fade',
             }}
           >
-            <Stack.Screen 
-              name="(auth)" 
-              options={{ 
+            <Stack.Screen
+              name="(auth)"
+              options={{
                 headerShown: false,
-                animation: 'fade',
-              }} 
+              }}
             />
-            <Stack.Screen 
-              name="(tabs)" 
-              options={{ 
+            <Stack.Screen
+              name="onboarding"
+              options={{
                 headerShown: false,
-                animation: 'fade',
-              }} 
+              }}
             />
-            <Stack.Screen 
-              name="streak" 
+            <Stack.Screen
+              name="(tabs)"
+              options={{
+                headerShown: false,
+              }}
+            />
+            <Stack.Screen
+              name="streak"
               options={{
                 presentation: 'card',
                 animation: 'slide_from_right',
               }}
             />
-            <Stack.Screen 
-              name="+not-found" 
+            <Stack.Screen
+              name="+not-found"
               options={{
                 presentation: 'modal',
-                animation: 'fade',
               }}
             />
           </Stack>

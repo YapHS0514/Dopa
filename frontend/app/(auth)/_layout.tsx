@@ -1,13 +1,38 @@
 import { Stack, Redirect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { useAuth } from '../../hooks/useAuth';
+import React, { useEffect, useState } from 'react';
 
 export default function AuthLayout() {
-  const { user } = useAuth();
+  const { user, checkOnboardingStatus, loading } = useAuth();
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
 
-  // If user is authenticated, redirect to home
+  useEffect(() => {
+    const fetchStatus = async () => {
+      if (user) {
+        try {
+          const completed = await checkOnboardingStatus();
+          setOnboarded(completed);
+        } catch (error) {
+          console.error('Error checking onboarding status:', error);
+          setOnboarded(false);
+        }
+      }
+    };
+    fetchStatus();
+  }, [user]);
+
+  // While checking session or onboarding status, don't render anything
+  if (loading || (user && onboarded === null)) {
+    return null;
+  }
+
+  // If user is authenticated, redirect based on onboarding status
   if (user) {
-    return <Redirect href="/(tabs)/" />;
+    if (onboarded) {
+      return <Redirect href="/(tabs)/" />;
+    }
+    return <Redirect href="/onboarding" />;
   }
 
   return (
@@ -30,12 +55,6 @@ export default function AuthLayout() {
         name="register"
         options={{
           title: 'Create Account',
-        }}
-      />
-      <Stack.Screen
-        name="onboarding"
-        options={{
-          title: 'Welcome to Dopa',
         }}
       />
     </Stack>

@@ -53,19 +53,26 @@ export default function RegisterScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={[GlobalStyles.screenContainer, styles.container]}
     >
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={[GlobalStyles.heading, styles.title]}>Create Account</Text>
+          <Text style={[GlobalStyles.heading, styles.title]}>
+            Create Account
+          </Text>
           <Text style={styles.subtitle}>Join our learning community</Text>
         </View>
-        
+
         <View style={styles.form}>
           <View style={styles.inputContainer}>
-            <Feather name="mail" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+            <Feather
+              name="mail"
+              size={20}
+              color={Colors.textSecondary}
+              style={styles.inputIcon}
+            />
             <TextInput
               style={styles.input}
               placeholder="Email"
@@ -77,9 +84,14 @@ export default function RegisterScreen() {
               autoComplete="email"
             />
           </View>
-          
+
           <View style={styles.inputContainer}>
-            <Feather name="lock" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+            <Feather
+              name="lock"
+              size={20}
+              color={Colors.textSecondary}
+              style={styles.inputIcon}
+            />
             <TextInput
               style={[styles.input, styles.passwordInput]}
               placeholder="Password"
@@ -89,20 +101,25 @@ export default function RegisterScreen() {
               secureTextEntry={!showPassword}
               autoComplete="new-password"
             />
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => setShowPassword(!showPassword)}
               style={styles.eyeIcon}
             >
-              <Feather 
-                name={showPassword ? "eye-off" : "eye"} 
-                size={20} 
-                color={Colors.textSecondary} 
+              <Feather
+                name={showPassword ? 'eye-off' : 'eye'}
+                size={20}
+                color={Colors.textSecondary}
               />
             </TouchableOpacity>
           </View>
 
           <View style={styles.inputContainer}>
-            <Feather name="lock" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+            <Feather
+              name="lock"
+              size={20}
+              color={Colors.textSecondary}
+              style={styles.inputIcon}
+            />
             <TextInput
               style={[styles.input, styles.passwordInput]}
               placeholder="Confirm Password"
@@ -112,19 +129,19 @@ export default function RegisterScreen() {
               secureTextEntry={!showConfirmPassword}
               autoComplete="new-password"
             />
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => setShowConfirmPassword(!showConfirmPassword)}
               style={styles.eyeIcon}
             >
-              <Feather 
-                name={showConfirmPassword ? "eye-off" : "eye"} 
-                size={20} 
-                color={Colors.textSecondary} 
+              <Feather
+                name={showConfirmPassword ? 'eye-off' : 'eye'}
+                size={20}
+                color={Colors.textSecondary}
               />
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
             onPress={handleRegister}
             disabled={loading}
@@ -136,7 +153,7 @@ export default function RegisterScreen() {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.linkButton}
             onPress={() => router.push('/login')}
           >

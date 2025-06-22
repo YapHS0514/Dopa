@@ -28,6 +28,7 @@ export const Colors = {
   buttonText: '#FFFFFF',
   inputBorder: '#333333',
   inputBackground: '#1A1A1A',
+  disabled: '#4A4A4A',     // Disabled state color
   
   // Navigation
   tabBarBackground: '#1A1A1A',

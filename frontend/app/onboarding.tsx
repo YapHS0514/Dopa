@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,13 +6,17 @@ import {
   TouchableOpacity,
   ScrollView,
   Dimensions,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import * as Animatable from 'react-native-animatable';
 import { Feather } from '@expo/vector-icons';
-import { useStore } from '../../lib/store';
-import { Colors } from '../../constants/Colors';
-import { TOPICS } from '../../constants/MockData';
+import { useStore } from '../lib/store';
+import { Colors } from '../constants/Colors';
+import { TOPICS } from '../constants/MockData';
+import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabase';
 
 const AGE_GROUPS = [
   { id: '8-12', label: '8-12 years' },
@@ -29,7 +33,26 @@ export default function OnboardingScreen() {
   const [step, setStep] = useState(1);
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<string | null>(null);
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
   const updateUserProfile = useStore((state) => state.updateUserProfile);
+  const { user, completeOnboarding } = useAuth();
+
+  // Add authentication check
+  useEffect(() => {
+    if (!user) {
+      console.log('No authenticated user, redirecting to login...');
+      router.replace('/(auth)/login');
+    }
+  }, [user]);
+
+  // If no user, show loading
+  if (!user) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color={Colors.accent} />
+      </View>
+    );
+  }
 
   const handleTopicToggle = useCallback((topicId: string) => {
     setSelectedTopics((prev) => {
@@ -43,17 +66,52 @@ export default function OnboardingScreen() {
     });
   }, []);
 
-  const handleNext = useCallback(() => {
+  const handleNext = useCallback(async () => {
     if (step === 1 && selectedAgeGroup) {
       setStep(2);
     } else if (step === 2 && selectedTopics.length >= MIN_TOPICS) {
-      updateUserProfile({
-        age_group: selectedAgeGroup as '8-12' | '13-17' | '18-25',
-        selected_topics: selectedTopics,
-      });
-      router.replace('/(tabs)');
+      try {
+        setLoading(true);
+
+        // Save user topic preferences
+        if (user) {
+          const { error: topicError } = await supabase
+            .from('user_topic_preferences')
+            .insert(
+              selectedTopics.map((topicId) => ({
+                user_id: user.id,
+                topic_id: topicId,
+                proficiency_level: 'beginner',
+              }))
+            );
+
+          if (topicError) throw topicError;
+        }
+
+        // Update local store
+        updateUserProfile({
+          age_group: selectedAgeGroup as '8-12' | '13-17' | '18-25',
+          selected_topics: selectedTopics,
+        });
+
+        // Mark onboarding as completed
+        await completeOnboarding();
+
+        router.replace('/(tabs)');
+      } catch (error: any) {
+        Alert.alert('Error', error.message || 'Failed to complete onboarding');
+      } finally {
+        setLoading(false);
+      }
     }
-  }, [step, selectedAgeGroup, selectedTopics, updateUserProfile]);
+  }, [
+    step,
+    selectedAgeGroup,
+    selectedTopics,
+    updateUserProfile,
+    user,
+    completeOnboarding,
+  ]);
 
   return (
     <View style={styles.container}>
@@ -77,7 +135,8 @@ export default function OnboardingScreen() {
                 <Text
                   style={[
                     styles.ageOptionText,
-                    selectedAgeGroup === group.id && styles.ageOptionTextSelected,
+                    selectedAgeGroup === group.id &&
+                      styles.ageOptionTextSelected,
                   ]}
                 >
                   {group.label}
@@ -103,8 +162,9 @@ export default function OnboardingScreen() {
             <View style={styles.topicsGrid}>
               {TOPICS.map((topic) => {
                 const isSelected = selectedTopics.includes(topic.id);
-                const isDisabled = !isSelected && selectedTopics.length >= MAX_TOPICS;
-                
+                const isDisabled =
+                  !isSelected && selectedTopics.length >= MAX_TOPICS;
+
                 return (
                   <TouchableOpacity
                     key={topic.id}
@@ -152,17 +212,25 @@ export default function OnboardingScreen() {
           ((step === 1 && selectedAgeGroup) ||
             (step === 2 && selectedTopics.length >= MIN_TOPICS)) &&
             styles.nextButtonEnabled,
+          loading && styles.nextButtonDisabled,
         ]}
         disabled={
+          loading ||
           (step === 1 && !selectedAgeGroup) ||
           (step === 2 && selectedTopics.length < MIN_TOPICS)
         }
         onPress={handleNext}
       >
-        <Text style={styles.nextButtonText}>
-          {step === 1 ? 'Next' : 'Get Started'}
-        </Text>
-        <Feather name="arrow-right" size={20} color="#fff" />
+        {loading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <>
+            <Text style={styles.nextButtonText}>
+              {step === 1 ? 'Next' : 'Get Started'}
+            </Text>
+            <Feather name="arrow-right" size={20} color="#fff" />
+          </>
+        )}
       </TouchableOpacity>
     </View>
   );
@@ -292,9 +360,16 @@ const styles = StyleSheet.create({
   nextButtonEnabled: {
     backgroundColor: Colors.accent,
   },
+  nextButtonDisabled: {
+    backgroundColor: Colors.disabled,
+  },
   nextButtonText: {
     color: Colors.buttonText,
     fontSize: 18,
     fontFamily: 'Inter-Medium',
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
