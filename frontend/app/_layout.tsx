@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   DarkTheme,
   DefaultTheme,
@@ -16,6 +16,7 @@ import * as Sentry from '@sentry/react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useStore } from '../lib/store';
 import { Colors } from '../constants/Colors';
+// import { SplashScreen as AppSplashScreen } from '../components/SplashScreen';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -42,10 +43,12 @@ Sentry.init({
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    'SF-Pro-Display': require('../assets/fonts/SFPRODISPLAYREGULAR.otf'),
   });
+
   const theme = useStore((state) => state.theme);
   const isDark = theme === 'dark' || colorScheme === 'dark';
+  const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
     if (!loaded) {
@@ -56,21 +59,36 @@ export default function RootLayout() {
     }
   }, [loaded]);
 
+  const handleSplashComplete = () => {
+    setShowSplash(false);
+  };
+
   if (!loaded) {
     return null;
   }
 
+  // if (showSplash) {
+  //   return (
+  //     <View style={{ flex: 1, backgroundColor: '#000000' }}>
+  //       <StatusBar style="light" />
+  //       <AppSplashScreen onAnimationComplete={handleSplashComplete} />
+  //     </View>
+  //   );
+  // }
+
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: '#000000' }}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <AuthProvider>
-          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-            <StatusBar style={isDark ? 'light' : 'dark'} />
+          <ThemeProvider
+            value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}
+          >
+            <StatusBar style="light" />
             <Stack
               screenOptions={{
                 headerShown: false,
                 contentStyle: {
-                  backgroundColor: Colors[isDark ? 'dark' : 'light'].background,
+                  backgroundColor: '#000000',
                 },
               }}
             >

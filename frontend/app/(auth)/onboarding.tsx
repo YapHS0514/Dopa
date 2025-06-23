@@ -10,9 +10,9 @@ import {
 import { router } from 'expo-router';
 import * as Animatable from 'react-native-animatable';
 import { Feather } from '@expo/vector-icons';
-import { useStore } from '../../lib/store';
 import { Colors } from '../../constants/Colors';
 import { TOPICS } from '../../constants/MockData';
+import { useStore } from '../../lib/store';
 
 const AGE_GROUPS = [
   { id: '8-12', label: '8-12 years' },
@@ -27,9 +27,7 @@ export default function OnboardingScreen() {
   const [step, setStep] = useState(1);
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<string | null>(null);
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
-  const theme = useStore((state) => state.theme);
   const updateUserProfile = useStore((state) => state.updateUserProfile);
-  const isDark = theme === 'dark';
 
   const handleTopicToggle = useCallback((topicId: string) => {
     setSelectedTopics((prev) =>
@@ -52,25 +50,13 @@ export default function OnboardingScreen() {
   }, [step, selectedAgeGroup, selectedTopics, updateUserProfile]);
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: Colors[isDark ? 'dark' : 'light'].background },
-      ]}>
+    <View style={[styles.container, { backgroundColor: Colors.background }]}>
       {step === 1 ? (
         <Animatable.View animation="fadeIn" style={styles.stepContainer}>
-          <Text
-            style={[
-              styles.title,
-              { color: Colors[isDark ? 'dark' : 'light'].text },
-            ]}>
+          <Text style={[styles.title, { color: Colors.text }]}>
             What's your age group?
           </Text>
-          <Text
-            style={[
-              styles.subtitle,
-              { color: Colors[isDark ? 'dark' : 'light'].text },
-            ]}>
+          <Text style={[styles.subtitle, { color: Colors.text }]}>
             We'll customize content for your age group
           </Text>
 
@@ -83,22 +69,14 @@ export default function OnboardingScreen() {
                   {
                     backgroundColor:
                       selectedAgeGroup === group.id
-                        ? Colors[isDark ? 'dark' : 'light'].tint
-                        : Colors[isDark ? 'dark' : 'light'].background,
-                    borderColor: Colors[isDark ? 'dark' : 'light'].border,
+                        ? Colors.tint
+                        : Colors.background,
+                    borderColor: Colors.border,
                   },
                 ]}
-                onPress={() => setSelectedAgeGroup(group.id)}>
-                <Text
-                  style={[
-                    styles.ageOptionText,
-                    {
-                      color:
-                        selectedAgeGroup === group.id
-                          ? '#fff'
-                          : Colors[isDark ? 'dark' : 'light'].text,
-                    },
-                  ]}>
+                onPress={() => setSelectedAgeGroup(group.id)}
+              >
+                <Text style={[styles.ageOptionText, { color: Colors.text }]}>
                   {group.label}
                 </Text>
               </TouchableOpacity>
@@ -107,24 +85,17 @@ export default function OnboardingScreen() {
         </Animatable.View>
       ) : (
         <Animatable.View animation="fadeIn" style={styles.stepContainer}>
-          <Text
-            style={[
-              styles.title,
-              { color: Colors[isDark ? 'dark' : 'light'].text },
-            ]}>
+          <Text style={[styles.title, { color: Colors.text }]}>
             Choose your interests
           </Text>
-          <Text
-            style={[
-              styles.subtitle,
-              { color: Colors[isDark ? 'dark' : 'light'].text },
-            ]}>
+          <Text style={[styles.subtitle, { color: Colors.text }]}>
             Select at least 5 topics you'd like to learn about
           </Text>
 
           <ScrollView
             style={styles.topicsContainer}
-            showsVerticalScrollIndicator={false}>
+            showsVerticalScrollIndicator={false}
+          >
             <View style={styles.topicsGrid}>
               {TOPICS.map((topic) => (
                 <TouchableOpacity
@@ -133,33 +104,23 @@ export default function OnboardingScreen() {
                     styles.topicItem,
                     {
                       backgroundColor: selectedTopics.includes(topic.id)
-                        ? Colors[isDark ? 'dark' : 'light'].tint
-                        : Colors[isDark ? 'dark' : 'light'].background,
-                      borderColor: Colors[isDark ? 'dark' : 'light'].border,
+                        ? Colors.tint
+                        : Colors.background,
+                      borderColor: Colors.border,
                     },
                   ]}
-                  onPress={() => handleTopicToggle(topic.id)}>
+                  onPress={() => handleTopicToggle(topic.id)}
+                >
                   <Text style={styles.topicIcon}>{topic.icon}</Text>
-                  <Text
-                    style={[
-                      styles.topicName,
-                      {
-                        color: selectedTopics.includes(topic.id)
-                          ? '#fff'
-                          : Colors[isDark ? 'dark' : 'light'].text,
-                      },
-                    ]}>
+                  <Text style={[styles.topicName, { color: Colors.text }]}>
                     {topic.name}
                   </Text>
                   <Text
                     style={[
                       styles.topicDescription,
-                      {
-                        color: selectedTopics.includes(topic.id)
-                          ? 'rgba(255, 255, 255, 0.8)'
-                          : Colors[isDark ? 'dark' : 'light'].textSecondary,
-                      },
-                    ]}>
+                      { color: Colors.textSecondary },
+                    ]}
+                  >
                     {topic.description}
                   </Text>
                 </TouchableOpacity>
@@ -176,19 +137,20 @@ export default function OnboardingScreen() {
             backgroundColor:
               (step === 1 && selectedAgeGroup) ||
               (step === 2 && selectedTopics.length >= 5)
-                ? Colors[isDark ? 'dark' : 'light'].tint
-                : Colors[isDark ? 'dark' : 'light'].buttonDisabled,
+                ? Colors.tint
+                : Colors.muted,
           },
         ]}
         disabled={
           (step === 1 && !selectedAgeGroup) ||
           (step === 2 && selectedTopics.length < 5)
         }
-        onPress={handleNext}>
+        onPress={handleNext}
+      >
         <Text style={styles.nextButtonText}>
           {step === 1 ? 'Next' : 'Get Started'}
         </Text>
-        <Feather name="arrow-right" size={20} color="#fff" />
+        <Feather name="arrow-right" size={20} color={Colors.text} />
       </TouchableOpacity>
     </View>
   );
@@ -204,7 +166,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'SF-Pro-Display',
     marginBottom: 8,
   },
   subtitle: {
@@ -266,7 +228,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   nextButtonText: {
-    color: '#fff',
+    color: Colors.text,
     fontSize: 18,
     fontWeight: '600',
   },

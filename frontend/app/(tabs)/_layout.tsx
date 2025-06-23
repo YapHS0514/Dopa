@@ -1,96 +1,66 @@
-import { Tabs } from 'expo-router';
-import { useColorScheme } from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import TabBarBackground from '../../components/ui/TabBarBackground';
-import { Colors } from '../../constants/Colors';
-import { useStore } from '../../lib/store';
-import { BlurView } from 'expo-blur';
+import React from 'react';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Ionicons } from '@expo/vector-icons';
+import { Platform, SafeAreaView } from 'react-native';
+import IndexScreen from './index';
+import SavedScreen from './saved';
+import ProgressScreen from './progress';
+// import StreakScreen from './streak';
+import ProfileScreen from './profile';
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
-  const theme = useStore((state) => state.theme);
-  const isDark = theme === 'dark' || colorScheme === 'dark';
+const Tab = createBottomTabNavigator();
 
+export default function TabsLayout() {
   return (
-    <Tabs
-      screenOptions={{
-        tabBarStyle: {
-          position: 'absolute',
-          bottom: 20,
-          left: 20,
-          right: 20,
-          height: 65,
-          backgroundColor: 'transparent',
-          borderTopWidth: 0,
-          elevation: 0,
-          borderRadius: 20,
-          overflow: 'hidden',
-        },
-        tabBarBackground: () => (
-          <BlurView
-            intensity={100}
-            tint={isDark ? 'dark' : 'light'}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              borderRadius: 20,
-              overflow: 'hidden',
-              borderWidth: 1,
-              borderColor: Colors[isDark ? 'dark' : 'light'].border,
-            }}
-          />
-        ),
-        tabBarActiveTintColor: Colors[isDark ? 'dark' : 'light'].tint,
-        tabBarInactiveTintColor: Colors[isDark ? 'dark' : 'light'].tabIconDefault,
-        headerShown: false,
-        tabBarLabelStyle: {
-          fontFamily: 'SpaceMono',
-          fontSize: 12,
-          marginBottom: 5,
-        },
-        tabBarIconStyle: {
-          marginTop: 5,
-        },
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Learn',
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="zap" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="saved"
-        options={{
-          title: 'Saved',
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="bookmark" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="progress"
-        options={{
-          title: 'Progress',
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="trending-up" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="user" size={size} color={color} />
-          ),
-        }}
-      />
-    </Tabs>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+          tabBarShowLabel: false,
+          headerShown: false,
+          tabBarStyle: {
+            position: 'absolute',
+            bottom: 0,
+            height: 70,
+            paddingBottom: Platform.OS === 'android' ? 80 : 10,
+            backgroundColor: 'black',
+            borderTopWidth: 0,
+          },
+          tabBarIcon: ({ focused, color, size }) => {
+            let iconName = '';
+            switch (route.name) {
+              case 'Explore':
+                iconName = focused ? 'compass' : 'compass-outline';
+                break;
+              case 'Saved':
+                iconName = focused ? 'bookmark' : 'bookmark-outline';
+                break;
+              case 'Progress':
+                iconName = focused ? 'bar-chart' : 'bar-chart-outline';
+                break;
+              case 'Streak':
+                iconName = focused ? 'flame' : 'flame-outline';
+                break;
+              case 'Profile':
+                iconName = focused ? 'person' : 'person-outline';
+                break;
+              default:
+                iconName = 'ellipse';
+            }
+            return (
+              <Ionicons
+                name={iconName as any}
+                size={28}
+                color={focused ? '#fff' : '#888'}
+              />
+            );
+          },
+        })}
+      >
+        <Tab.Screen name="Explore" component={IndexScreen} />
+        <Tab.Screen name="Saved" component={SavedScreen} />
+        <Tab.Screen name="Progress" component={ProgressScreen} />
+        <Tab.Screen name="Profile" component={ProfileScreen} />
+      </Tab.Navigator>
+    </SafeAreaView>
   );
 }

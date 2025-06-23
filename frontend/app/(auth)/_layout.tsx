@@ -12,14 +12,15 @@ export default function AuthLayout() {
     <Stack
       screenOptions={{
         headerStyle: {
-          backgroundColor: Colors[isDark ? 'dark' : 'light'].background,
+          backgroundColor: Colors.background,
         },
-        headerTintColor: Colors[isDark ? 'dark' : 'light'].text,
+        headerTintColor: Colors.text,
         headerTitleStyle: {
-          fontFamily: 'SpaceMono',
+          fontFamily: 'SF-Pro-Display',
         },
         headerShadowVisible: false,
-      }}>
+      }}
+    >
       <Stack.Screen
         name="login"
         options={{

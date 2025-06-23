@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,33 +9,99 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
+  Animated,
 } from 'react-native';
 import { Link, router } from 'expo-router';
-import * as Animatable from 'react-native-animatable';
 import { useStore } from '../../lib/store';
 import { Colors } from '../../constants/Colors';
-import { AppIcon } from '../../components/AppIcon';
 import { AuthContext } from '../../contexts/AuthContext';
-import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
-import { Feather } from '@expo/vector-icons';
+import { GlobalStyles } from '../../constants/GlobalStyles';
+import { Ionicons } from '@expo/vector-icons';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const theme = useStore((state) => state.theme);
-  const isDark = theme === 'dark';
   const { signIn } = React.useContext(AuthContext);
+  const [showForm, setShowForm] = useState(false);
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const isMounted = useRef(true);
+  const letterAnimations = [
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+  ];
+  const shrinkAnim = useRef(new Animated.Value(1)).current;
+  const moveAnim = useRef(new Animated.Value(0)).current;
+  const formFade = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    isMounted.current = true;
+    const animation = Animated.sequence([
+      Animated.timing(letterAnimations[0], {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(letterAnimations[1], {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(letterAnimations[2], {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(letterAnimations[3], {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.delay(400),
+      Animated.parallel([
+        Animated.timing(shrinkAnim, {
+          toValue: 0.7,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.timing(moveAnim, {
+          toValue: -SCREEN_HEIGHT * 0.12,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.timing(formFade, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]);
+
+    animation.start(() => {
+      if (isMounted.current) {
+        setShowForm(true);
+      }
+    });
+
+    return () => {
+      isMounted.current = false;
+      animation.stop();
+      letterAnimations.forEach((anim) => anim.setValue(0));
+      shrinkAnim.setValue(1);
+      moveAnim.setValue(0);
+      formFade.setValue(0);
+    };
+  }, []);
 
   const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
-
     setLoading(true);
     try {
       await signIn(email, password);
@@ -48,222 +114,187 @@ export default function LoginScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={isDark ? 
-        ['#000000', '#1a1a1a'] : 
-        ['#ffffff', '#f0f0f0']}
-      style={styles.container}
+    <View
+      style={[
+        GlobalStyles.container,
+        { justifyContent: 'center', alignItems: 'center', height: '100%' },
+      ]}
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
+        style={{
+          width: '100%',
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
       >
-        <Animatable.View 
-          animation="fadeIn" 
-          duration={1000} 
-          style={styles.logoContainer}
+        <Animated.View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginBottom: 0,
+            transform: [{ scale: shrinkAnim }, { translateY: moveAnim }],
+          }}
         >
-          <Animatable.View 
-            animation="bounceIn" 
-            duration={1500}
-            style={styles.iconContainer}
-          >
-            <AppIcon color={Colors[isDark ? 'dark' : 'light'].tint} />
-            <LinearGradient
-              colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0)']}
-              style={styles.iconGlow}
-            />
-          </Animatable.View>
-          <Animatable.Text
-            animation="fadeInUp"
-            delay={500}
-            style={[styles.title, { color: Colors[isDark ? 'dark' : 'light'].text }]}
-          >
-            Welcome Back
-          </Animatable.Text>
-        </Animatable.View>
-
-        <Animatable.View
-          animation="fadeInUp"
-          delay={1000}
-          style={styles.formContainer}
+          {['D', 'O', 'P', 'A'].map((letter, i) => (
+            <Animated.Text
+              key={letter}
+              style={[
+                GlobalStyles.logoText,
+                {
+                  opacity: letterAnimations[i],
+                  transform: [
+                    {
+                      translateY: letterAnimations[i].interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [40, 0],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              {letter}
+            </Animated.Text>
+          ))}
+        </Animated.View>
+        <Animated.View
+          style={{
+            width: '100%',
+            opacity: formFade,
+            transform: [{ translateY: -80 }],
+          }}
         >
-          <BlurView
-            intensity={100}
-            tint={isDark ? 'dark' : 'light'}
-            style={styles.formBlur}
-          >
+          <View style={styles.formContainer}>
             <View style={styles.inputContainer}>
-              <Feather 
-                name="mail" 
-                size={20} 
-                color={Colors[isDark ? 'dark' : 'light'].textSecondary} 
-                style={styles.inputIcon}
-              />
               <TextInput
                 style={[
                   styles.input,
-                  { color: Colors[isDark ? 'dark' : 'light'].text }
+                  { backgroundColor: '#fff', color: '#000', marginTop: 0 },
                 ]}
                 placeholder="Email"
-                placeholderTextColor={Colors[isDark ? 'dark' : 'light'].textSecondary}
+                placeholderTextColor={Colors.muted}
                 value={email}
                 onChangeText={setEmail}
                 autoCapitalize="none"
                 keyboardType="email-address"
               />
             </View>
-
             <View style={styles.inputContainer}>
-              <Feather 
-                name="lock" 
-                size={20} 
-                color={Colors[isDark ? 'dark' : 'light'].textSecondary} 
-                style={styles.inputIcon}
-              />
               <TextInput
                 style={[
                   styles.input,
-                  { color: Colors[isDark ? 'dark' : 'light'].text }
+                  { backgroundColor: '#fff', color: '#000', marginTop: 16 },
                 ]}
                 placeholder="Password"
-                placeholderTextColor={Colors[isDark ? 'dark' : 'light'].textSecondary}
+                placeholderTextColor={Colors.muted}
                 value={password}
                 onChangeText={setPassword}
-                secureTextEntry
+                secureTextEntry={!isPasswordVisible}
               />
+              <TouchableOpacity
+                style={styles.eyeIcon}
+                onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+              >
+                <Ionicons
+                  name={isPasswordVisible ? 'eye-off' : 'eye'}
+                  size={24}
+                  color={Colors.muted}
+                />
+              </TouchableOpacity>
             </View>
-
             <TouchableOpacity
-              style={[
-                styles.loginButton,
-                loading && styles.buttonDisabled
-              ]}
+              style={styles.button}
               onPress={handleLogin}
               disabled={loading}
             >
-              <LinearGradient
-                colors={[Colors[isDark ? 'dark' : 'light'].tint, Colors[isDark ? 'dark' : 'light'].success]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.buttonGradient}
-              >
-                <Text style={styles.loginButtonText}>
-                  {loading ? 'Logging in...' : 'Login'}
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <View style={styles.footer}>
-              <Text style={[styles.footerText, { color: Colors[isDark ? 'dark' : 'light'].textSecondary }]}>
-                Don't have an account?{' '}
+              <Text style={styles.buttonText}>
+                {loading ? 'Logging in...' : 'Login'}
               </Text>
+            </TouchableOpacity>
+            <View style={styles.footer}>
+              <Text style={GlobalStyles.text}>Don't have an account? </Text>
               <Link href="/(auth)/register" asChild>
                 <TouchableOpacity>
-                  <Text style={[styles.link, { color: Colors[isDark ? 'dark' : 'light'].tint }]}>
+                  <Text
+                    style={[
+                      GlobalStyles.buttonText,
+                      { textDecorationLine: 'underline' },
+                    ]}
+                  >
                     Sign Up
                   </Text>
                 </TouchableOpacity>
               </Link>
             </View>
-          </BlurView>
-        </Animatable.View>
+          </View>
+        </Animated.View>
       </KeyboardAvoidingView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  keyboardView: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 20,
-  },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  iconContainer: {
-    position: 'relative',
-    width: 120,
-    height: 120,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconGlow: {
-    position: 'absolute',
-    top: -20,
-    left: -20,
-    right: -20,
-    bottom: -20,
-    borderRadius: 80,
-    opacity: 0.5,
-  },
-  title: {
-    fontSize: 32,
-    fontFamily: 'SpaceMono',
-    marginTop: 20,
-  },
   formContainer: {
     width: '100%',
-  },
-  formBlur: {
-    padding: 20,
-    borderRadius: 20,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
-    marginBottom: 16,
-    paddingHorizontal: 16,
-    height: 50,
-  },
-  inputIcon: {
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    fontFamily: 'SpaceMono',
-  },
-  loginButton: {
-    height: 50,
-    borderRadius: 12,
-    overflow: 'hidden',
+    maxWidth: 400,
+    alignSelf: 'center',
+    padding: 24,
     marginTop: 16,
   },
-  buttonGradient: {
-    flex: 1,
+  inputContainer: {
+    marginBottom: 0,
     justifyContent: 'center',
-    alignItems: 'center',
   },
-  buttonDisabled: {
-    opacity: 0.7,
+  inputLabel: {
+    ...GlobalStyles.textMedium,
+    marginBottom: 6,
   },
-  loginButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontFamily: 'SpaceMono',
+  input: {
+    ...GlobalStyles.text,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    fontSize: 17,
+    color: Colors.text,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 0,
+    marginBottom: 2,
+    paddingRight: 50,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 20,
+    marginTop: 14,
   },
-  footerText: {
-    fontSize: 14,
-    fontFamily: 'SpaceMono',
+  button: {
+    backgroundColor: Colors.text,
+    height: 54,
+    borderRadius: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
   },
-  link: {
-    fontSize: 14,
-    fontFamily: 'SpaceMono',
+  buttonText: {
+    color: '#000',
+    fontWeight: 'bold',
+    fontSize: 17,
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 15,
+    top: 0,
+    bottom: -18,
+    justifyContent: 'center',
   },
 });

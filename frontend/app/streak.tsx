@@ -1,0 +1,517 @@
+// streak.tsx
+import React, { useState, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Dimensions,
+  Modal,
+  FlatList,
+  Animated,
+  findNodeHandle,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Colors } from '../constants/Colors';
+import { useStore } from '../lib/store';
+import { Feather } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { router } from 'expo-router';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+const YEARS = Array.from({ length: 2100 - 2024 + 1 }, (_, i) => 2024 + i);
+
+const MOCK_DATA = {
+  currentStreak: 6,
+  activeDaysThisMonth: 15,
+  streakRevives: 2,
+  activeDays: [1, 2, 3, 5, 7, 8, 10, 12, 14, 15, 17, 19, 21, 22, 24],
+};
+
+export default function StreakScreen() {
+  const theme = useStore((state) => state.theme);
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  const [dropdownVisible, setDropdownVisible] = useState(false);
+  const [dropdownY, setDropdownY] = useState(0);
+  const dropdownAnim = useRef(new Animated.Value(0)).current;
+  const monthYearBarRef = useRef<View>(null);
+
+  const getDaysInMonth = (month: number, year: number) => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (month: number, year: number) => {
+    return new Date(year, month, 1).getDay();
+  };
+
+  const renderCalendar = () => {
+    const daysInMonth = getDaysInMonth(currentMonth, currentYear);
+    const firstDay = getFirstDayOfMonth(currentMonth, currentYear);
+    const days = [];
+
+    for (let i = 0; i < firstDay; i++) {
+      days.push(<View key={`empty-${i}`} style={styles.calendarDay} />);
+    }
+
+    for (let i = 1; i <= daysInMonth; i++) {
+      const isActive = MOCK_DATA.activeDays.includes(i);
+      days.push(
+        <View key={i} style={styles.calendarDay}>
+          <View
+            style={[
+              styles.calendarDayInner,
+              isActive && {
+                backgroundColor: '#ef4444',
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.calendarDayText,
+                { color: isActive ? '#fff' : Colors.text },
+              ]}
+            >
+              {i}
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
+    return days;
+  };
+
+  const openDropdown = () => {
+    if (monthYearBarRef.current) {
+      const handle = findNodeHandle(monthYearBarRef.current);
+      if (handle) {
+        monthYearBarRef.current.measure(
+          (
+            fx: number,
+            fy: number,
+            w: number,
+            h: number,
+            px: number,
+            py: number
+          ) => {
+            setDropdownY(py + h);
+            setDropdownVisible(true);
+            dropdownAnim.setValue(0);
+            Animated.timing(dropdownAnim, {
+              toValue: 1,
+              duration: 220,
+              useNativeDriver: true,
+            }).start();
+          }
+        );
+      }
+    } else {
+      setDropdownVisible(true);
+      dropdownAnim.setValue(0);
+      Animated.timing(dropdownAnim, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }).start();
+    }
+    Haptics.selectionAsync();
+  };
+
+  const closeDropdown = () => {
+    Animated.timing(dropdownAnim, {
+      toValue: 0,
+      duration: 180,
+      useNativeDriver: true,
+    }).start(() => setDropdownVisible(false));
+  };
+
+  const confirmSelection = () => {
+    closeDropdown();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  // Add chevron handlers
+  const handlePrevMonth = () => {
+    if (currentMonth === 0 && currentYear === 2024) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (currentMonth === 0) {
+      setCurrentMonth(11);
+      setCurrentYear((y) => y - 1);
+    } else {
+      setCurrentMonth((m) => m - 1);
+    }
+  };
+  const handleNextMonth = () => {
+    if (currentMonth === 11 && currentYear === 2100) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (currentMonth === 11) {
+      setCurrentMonth(0);
+      setCurrentYear((y) => y + 1);
+    } else {
+      setCurrentMonth((m) => m + 1);
+    }
+  };
+
+  return (
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: Colors.background }]}
+    >
+      <TouchableOpacity
+        style={{ position: 'absolute', top: 75, left: 18, zIndex: 100 }}
+        onPress={() => router.back()}
+        activeOpacity={0.7}
+      >
+        <Feather name="arrow-left" size={28} color={Colors.text} />
+      </TouchableOpacity>
+
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <Text style={[styles.streakCount, { color: Colors.tint }]}>
+            {MOCK_DATA.currentStreak} day streak! 🔥
+          </Text>
+          <View
+            style={[styles.encouragementBox, { backgroundColor: '#10B98120' }]}
+          >
+            <Text style={[styles.encouragementText, { color: Colors.tint }]}>
+              You're on fire! Keep going! 🎯
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.monthSelector}>
+          <TouchableOpacity
+            onPress={handlePrevMonth}
+            hitSlop={{ left: 10, right: 10, top: 10, bottom: 10 }}
+          >
+            <Feather name="chevron-left" size={24} color={Colors.text} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            ref={monthYearBarRef}
+            onPress={openDropdown}
+            activeOpacity={1}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={[styles.monthYear, { color: Colors.text }]}>
+              {MONTHS[currentMonth]} {currentYear}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleNextMonth}
+            hitSlop={{ left: 10, right: 10, top: 10, bottom: 10 }}
+          >
+            <Feather name="chevron-right" size={24} color={Colors.text} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.statsContainer}>
+          <TouchableOpacity
+            style={[
+              styles.statButton,
+              { backgroundColor: Colors.cardBackground },
+            ]}
+          >
+            <Text style={[styles.statValue, { color: Colors.text }]}>
+              {MOCK_DATA.activeDaysThisMonth}
+            </Text>
+            <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
+              Active Days
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.statButton,
+              { backgroundColor: Colors.cardBackground },
+            ]}
+          >
+            <Text style={[styles.statValue, { color: Colors.text }]}>
+              {MOCK_DATA.streakRevives}
+            </Text>
+            <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
+              Streak Revives
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View
+          style={[
+            styles.calendarContainer,
+            {
+              backgroundColor: Colors.cardBackground,
+              borderColor: '#10B98120',
+            },
+          ]}
+        >
+          <View style={styles.weekdayHeader}>
+            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+              <Text
+                key={i}
+                style={[styles.weekdayText, { color: Colors.textSecondary }]}
+              >
+                {day}
+              </Text>
+            ))}
+          </View>
+          <View style={styles.calendarGrid}>{renderCalendar()}</View>
+        </View>
+
+        <View style={styles.rewardProgress}>
+          <Text style={[styles.rewardText, { color: Colors.textSecondary }]}>
+            🎁 Maintain streak for 4 more days to unlock a special reward!
+          </Text>
+          <View style={styles.progressBarContainer}>
+            <View
+              style={[styles.progressBar, { backgroundColor: '#F59E0B20' }]}
+            >
+              <View
+                style={[
+                  styles.progressFill,
+                  { backgroundColor: '#F59E0B', width: '60%' },
+                ]}
+              />
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+
+      {dropdownVisible && (
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={closeDropdown}
+        >
+          <Animated.View
+            style={[
+              styles.dropdownContainer,
+              {
+                top: dropdownY,
+                left: SCREEN_WIDTH * 0.1,
+                width: SCREEN_WIDTH * 0.8,
+                opacity: dropdownAnim,
+                transform: [
+                  {
+                    translateY: dropdownAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-20, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <View style={styles.dropdownLists}>
+              <FlatList
+                data={MONTHS}
+                keyExtractor={(item) => item}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                renderItem={({ item, index }) => (
+                  <TouchableOpacity onPress={() => setCurrentMonth(index)}>
+                    <Text
+                      style={[
+                        styles.dropdownItem,
+                        index === currentMonth && styles.selectedDropdownItem,
+                      ]}
+                    >
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                getItemLayout={(_, i) => ({
+                  length: 40,
+                  offset: 40 * i,
+                  index: i,
+                })}
+                initialScrollIndex={Math.max(currentMonth - 2, 0)}
+                snapToInterval={40}
+                decelerationRate="fast"
+                style={styles.dropdownCol}
+              />
+              <FlatList
+                data={YEARS}
+                keyExtractor={(item) => item.toString()}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity onPress={() => setCurrentYear(item)}>
+                    <Text
+                      style={[
+                        styles.dropdownItem,
+                        item === currentYear && styles.selectedDropdownItem,
+                      ]}
+                    >
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                getItemLayout={(_, i) => ({
+                  length: 40,
+                  offset: 40 * i,
+                  index: i,
+                })}
+                initialScrollIndex={Math.max(YEARS.indexOf(currentYear) - 2, 0)}
+                snapToInterval={40}
+                decelerationRate="fast"
+                style={styles.dropdownCol}
+              />
+            </View>
+            {/* <TouchableOpacity
+              style={styles.dropdownConfirmButton}
+              onPress={confirmSelection}
+            >
+              <Text style={{ color: '#fff', fontSize: 16 }}>Done</Text>
+            </TouchableOpacity> */}
+          </Animated.View>
+        </TouchableOpacity>
+      )}
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  scrollView: { flex: 1 },
+  header: { alignItems: 'center', paddingVertical: 30, paddingHorizontal: 20 },
+  streakCount: { fontSize: 32, fontFamily: 'SF-Pro-Display', marginBottom: 16 },
+  encouragementBox: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 20,
+  },
+  encouragementText: {
+    fontSize: 16,
+    fontFamily: 'SF-Pro-Display',
+    textAlign: 'center',
+  },
+  monthSelector: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  monthYear: { fontSize: 18, fontFamily: 'SF-Pro-Display' },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  statButton: {
+    width: (SCREEN_WIDTH - 60) / 2,
+    padding: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  statValue: { fontSize: 24, fontFamily: 'SF-Pro-Display', marginBottom: 4 },
+  statLabel: { fontSize: 14, fontFamily: 'SF-Pro-Display' },
+  calendarContainer: {
+    margin: 20,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 2,
+  },
+  weekdayHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 8,
+  },
+  weekdayText: {
+    width: 32,
+    textAlign: 'center',
+    fontSize: 14,
+    fontFamily: 'SF-Pro-Display',
+  },
+  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  calendarDay: { width: `${100 / 7}%`, aspectRatio: 1, padding: 2 },
+  calendarDayInner: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  calendarDayText: { fontSize: 14, fontFamily: 'SF-Pro-Display' },
+  rewardProgress: { padding: 20, marginBottom: 20 },
+  rewardText: {
+    fontSize: 14,
+    fontFamily: 'SF-Pro-Display',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  progressBarContainer: { height: 8, borderRadius: 4, overflow: 'hidden' },
+  progressBar: { flex: 1 },
+  progressFill: { height: '100%', borderRadius: 4 },
+  dropdownContainer: {
+    position: 'absolute',
+    backgroundColor: 'black',
+    padding: 16,
+    zIndex: 999,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 10,
+    flexDirection: 'column',
+    alignItems: 'center',
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+  },
+  dropdownLists: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dropdownCol: {
+    width: 110,
+    maxHeight: 200,
+    paddingHorizontal: 20,
+  },
+  dropdownItem: {
+    fontSize: 16,
+    paddingVertical: 8,
+    textAlign: 'center',
+    color: Colors.text,
+  },
+  selectedDropdownItem: {
+    color: '#ef4444',
+    fontWeight: 'bold',
+  },
+  dropdownConfirmButton: {
+    backgroundColor: Colors.tint,
+    paddingVertical: 10,
+    paddingHorizontal: 32,
+    borderRadius: 8,
+    marginTop: 12,
+    alignSelf: 'center',
+  },
+});
