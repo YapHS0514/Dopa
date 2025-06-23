@@ -1,360 +1,380 @@
 import React, { useState, useRef, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Dimensions,
+  FlatList,
   Animated,
   PanResponder,
-  Platform,
   TouchableOpacity,
+  Image,
   StatusBar,
+  Linking,
+  Alert,
+  Share,
+  Platform,
+  SafeAreaView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Colors } from '../../constants/Colors';
 import { GlobalStyles } from '../../constants/GlobalStyles';
-import { MOCK_FACTS, type Fact } from '../../constants/MockData';
-import { BlurView } from 'expo-blur';
-import { Feather } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
-import { useRouter } from 'expo-router';
-import RightNavBar from '../../components/RightNavBar';
+import { Colors } from '../../constants/Colors';
+import { Ionicons } from '@expo/vector-icons';
+import { MOCK_FACTS } from '../../constants/MockData';
+import { ContentCard } from '../../components/ContentCard';
+import type { ListRenderItemInfo } from 'react-native';
+import { Audio } from 'expo-av';
+import { router } from 'expo-router';
 
-const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-const SAVE_THRESHOLD = SCREEN_WIDTH * 0.4;
-const NAV_THRESHOLD = SCREEN_WIDTH * 0.15; // Lower threshold for nav bar
+type Fact = (typeof MOCK_FACTS)[number];
 
-export default function LearnScreen() {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [showStats, setShowStats] = useState(true);
-  const [showSaveNotification, setShowSaveNotification] = useState(false);
-  const [showNavBar, setShowNavBar] = useState(false);
-  const router = useRouter();
-  
-  const position = useRef(new Animated.ValueXY()).current;
-  const saveProgress = useRef(new Animated.Value(0)).current;
-  const statsOpacity = useRef(new Animated.Value(1)).current;
-  const saveNotificationOpacity = useRef(new Animated.Value(0)).current;
+const getFactCards = (fact: Fact) => {
+  const cards = [
+    {
+      key: 'hook',
+      title: fact.hook,
+      body: '',
+      isSourceCard: false,
+      isHookCard: true,
+      sourceUrl: undefined,
+    },
+    ...fact.fullContent
+      .split('.')
+      .filter(Boolean)
+      .map((sentence: string, idx: number) => ({
+        key: `content-${idx}`,
+        title: '',
+        body: sentence.trim() + '.',
+        isSourceCard: false,
+        isHookCard: undefined,
+        sourceUrl: undefined,
+      })),
+    {
+      key: 'summary',
+      title: 'Summary',
+      body: fact.summary,
+      isSourceCard: false,
+      isHookCard: undefined,
+      sourceUrl: undefined,
+    },
+    {
+      key: 'source',
+      title: 'Source',
+      body: fact.sourceUrl,
+      isSourceCard: true,
+      isHookCard: undefined,
+      sourceUrl: fact.sourceUrl,
+    },
+  ];
+  return cards;
+};
 
-  // Hide stats bar after 10 seconds
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      Animated.timing(statsOpacity, {
-        toValue: 0,
-        duration: 500,
+const FactCarousel = ({ fact }: { fact: Fact }) => {
+  const cards = getFactCards(fact);
+  const [cardIndex, setCardIndex] = useState(0);
+  const [liked, setLiked] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [showSheet, setShowSheet] = useState(false);
+  const likeAnim = useRef(new Animated.Value(1)).current;
+  const listenAnim = useRef(new Animated.Value(1)).current;
+  const shareAnim = useRef(new Animated.Value(1)).current;
+  const saveAnim = useRef(new Animated.Value(1)).current;
+
+  // Animation for button press
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const animatePress = (anim: Animated.Value) => {
+    Animated.sequence([
+      Animated.spring(anim, { toValue: 0.85, useNativeDriver: true }),
+      Animated.spring(anim, {
+        toValue: 1,
+        friction: 3,
+        tension: 40,
         useNativeDriver: true,
-      }).start(() => setShowStats(false));
-    }, 10000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const panResponder = PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onPanResponderMove: (_, gesture) => {
-      // Handle vertical swipe
-      if (Math.abs(gesture.dy) > Math.abs(gesture.dx)) {
-        position.setValue({ x: 0, y: gesture.dy });
-      } 
-      // Handle horizontal swipe (save gesture or nav bar)
-      else {
-        if (gesture.dx > 0) {
-          // Right swipe - save gesture
-          position.setValue({ x: gesture.dx, y: 0 });
-          saveProgress.setValue(Math.min(gesture.dx / SAVE_THRESHOLD, 1));
-        } else if (gesture.dx < 0) {
-          // Left swipe - nav bar
-          if (Math.abs(gesture.dx) > NAV_THRESHOLD) {
-            setShowNavBar(true);
-          }
-        }
-      }
-    },
-    onPanResponderRelease: (_, gesture) => {
-      if (Math.abs(gesture.dy) > Math.abs(gesture.dx)) {
-        // Vertical swipe handling
-        if (gesture.dy < -50) { // Swipe up - Next
-          Animated.timing(position, {
-            toValue: { x: 0, y: -SCREEN_HEIGHT },
-            duration: 300,
-            useNativeDriver: true,
-          }).start(() => {
-            position.setValue({ x: 0, y: 0 });
-            setCurrentIndex(prev => (prev + 1) % MOCK_FACTS.length);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            setShowStats(false);
-          });
-        } else if (gesture.dy > 50) { // Swipe down - Previous
-          Animated.timing(position, {
-            toValue: { x: 0, y: SCREEN_HEIGHT },
-            duration: 300,
-            useNativeDriver: true,
-          }).start(() => {
-            position.setValue({ x: 0, y: 0 });
-            setCurrentIndex(prev => (prev - 1 + MOCK_FACTS.length) % MOCK_FACTS.length);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            setShowStats(false);
-          });
-        } else {
-          // Reset position if swipe not far enough
-          Animated.spring(position, {
-            toValue: { x: 0, y: 0 },
-            useNativeDriver: true,
-            friction: 5,
-          }).start();
-        }
-      } else {
-        // Horizontal swipe handling (save gesture)
-        if (gesture.dx >= SAVE_THRESHOLD) {
-          // Save the fact
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          setShowSaveNotification(true);
-          Animated.sequence([
-            Animated.timing(saveNotificationOpacity, {
-              toValue: 1,
-              duration: 300,
-              useNativeDriver: true,
-            }),
-            Animated.delay(2700),
-            Animated.timing(saveNotificationOpacity, {
-              toValue: 0,
-              duration: 300,
-              useNativeDriver: true,
-            }),
-          ]).start(() => setShowSaveNotification(false));
-        }
-        
-        // Reset position and save progress
-        Animated.parallel([
-          Animated.spring(position, {
-            toValue: { x: 0, y: 0 },
-            useNativeDriver: true,
-            friction: 5,
-          }),
-          Animated.timing(saveProgress, {
-            toValue: 0,
-            duration: 300,
-            useNativeDriver: false,
-          }),
-        ]).start();
-      }
-    },
-  });
-
-  const handleScreenTap = () => {
-    setShowStats(!showStats);
-    Animated.timing(statsOpacity, {
-      toValue: showStats ? 0 : 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
+      }),
+    ]).start();
   };
-
-  const currentFact = MOCK_FACTS[currentIndex];
-
-  const handleStreakPress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/streak');
+  const handleLike = () => {
+    animatePress(likeAnim);
+    setLiked((l) => !l);
   };
+  const handleSave = () => {
+    animatePress(saveAnim);
+    setSaved((s) => !s);
+  };
+  const handleListen = async () => {
+    animatePress(listenAnim);
+    if (!listening) {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission to use speaker denied.');
+        return;
+      }
+      try {
+        const { sound: newSound } = await Audio.Sound.createAsync(
+          require('../../assets/sound.mp3') // Update to your path
+        );
+        setSound(newSound);
+        await newSound.playAsync();
+        setListening(true);
+      } catch (e) {
+        Alert.alert('Audio error', 'Unable to play sound.');
+      }
+    } else {
+      if (sound) {
+        await sound.stopAsync();
+        await sound.unloadAsync();
+        setSound(null);
+      }
+      setListening(false);
+    }
+  };
+  const handleShare = () => {
+    animatePress(shareAnim);
+    setShowSheet(true);
+  };
+  const closeSheet = () => setShowSheet(false);
 
   return (
-    <SafeAreaView style={GlobalStyles.screenContainer}>
-      <StatusBar barStyle="light-content" />
-      
-      {/* Stats Bar */}
-      {showStats && (
-        <Animated.View style={[GlobalStyles.statsBar, { opacity: statsOpacity }]}>
-          <TouchableOpacity style={GlobalStyles.streakContainer} onPress={handleStreakPress}>
-            <Text style={GlobalStyles.text}>🔥 3</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={GlobalStyles.coinsContainer}>
-            <Text style={GlobalStyles.text}>🪙 120</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      )}
-
-      {/* Save Progress Bar */}
-      <Animated.View 
-        style={[{
-          position: 'absolute',
-          right: 0,
-          top: 0,
-          bottom: 0,
-          width: 5,
-          backgroundColor: Colors.saveBarBackground,
-          zIndex: 1000,
-        }]}>
-        <Animated.View 
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: Colors.saveBarFill,
-            height: saveProgress.interpolate({
-              inputRange: [0, 1],
-              outputRange: ['0%', '100%'],
-            }),
-          }}
-        />
-      </Animated.View>
-
-      {/* Content Card */}
-      <TouchableOpacity 
-        activeOpacity={1} 
-        onPress={handleScreenTap}
-        style={{ flex: 1 }}
-      >
-        <Animated.View 
-          style={[
-            GlobalStyles.card,
-            {
-              transform: [
-                { translateX: position.x },
-                { translateY: position.y },
-              ],
-            },
-          ]}
-          {...panResponder.panHandlers}
-        >
-          <View style={{ padding: 20 }}>
-            <View style={{ 
-              backgroundColor: `${Colors.topics[currentFact.topic]}20`,
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: 12,
-              alignSelf: 'flex-start',
-              marginBottom: 16,
-            }}>
-              <Text style={[
-                GlobalStyles.text,
-                { color: Colors.topics[currentFact.topic] }
-              ]}>
-                {currentFact.icon} {currentFact.topic}
-              </Text>
+    <View style={{ flex: 1 }}>
+      <FlatList
+        data={cards}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        keyExtractor={(item) => item.key}
+        renderItem={({ item }) => (
+          <View
+            style={{
+              flex: 1,
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: SCREEN_HEIGHT,
+              width: SCREEN_WIDTH,
+            }}
+          >
+            <View
+              style={{
+                aspectRatio: 4 / 5,
+                width: SCREEN_WIDTH,
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              <ContentCard
+                title={item.title}
+                body={item.body}
+                isSourceCard={item.isSourceCard}
+                isHookCard={item.isHookCard}
+                sourceUrl={item.sourceUrl}
+                onSourcePress={
+                  item.isSourceCard && item.sourceUrl
+                    ? () => Linking.openURL(item.sourceUrl)
+                    : undefined
+                }
+              />
             </View>
-            
-            <Text style={[GlobalStyles.text, { fontSize: 24 }]}>
-              {currentFact.fact}
-            </Text>
           </View>
-        </Animated.View>
-      </TouchableOpacity>
-
-      {/* Save Notification */}
-      {showSaveNotification && (
-        <Animated.View style={[
-          GlobalStyles.saveNotification,
-          { opacity: saveNotificationOpacity }
-        ]}>
-          <Text style={[GlobalStyles.text, { fontSize: 16 }]}>
-            Saved! 🎉
-          </Text>
+        )}
+        onMomentumScrollEnd={(e) => {
+          const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+          setCardIndex(idx);
+        }}
+      />
+      {/* Right side buttons */}
+      <View style={styles.bottomRight}>
+        <TouchableOpacity onPress={handleLike} activeOpacity={0.7}>
+          <Animated.View
+            style={{ transform: [{ scale: likeAnim }], marginBottom: 25 }}
+          >
+            <Ionicons
+              name={'heart'}
+              size={32}
+              color={liked ? '#ef4444' : Colors.text}
+            />
+          </Animated.View>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={handleListen} activeOpacity={0.7}>
+          <Animated.View
+            style={{ transform: [{ scale: listenAnim }], marginBottom: 25 }}
+          >
+            <Ionicons
+              name={'volume-high'}
+              size={32}
+              color={listening ? 'gold' : Colors.text}
+            />
+          </Animated.View>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={handleShare} activeOpacity={0.7}>
+          <Animated.View
+            style={{ transform: [{ scale: shareAnim }], marginBottom: 25 }}
+          >
+            <Ionicons name={'share-social'} size={32} color={Colors.text} />
+          </Animated.View>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={handleSave} activeOpacity={0.7}>
+          <Animated.View style={{ transform: [{ scale: saveAnim }] }}>
+            <Ionicons
+              name={'bookmark'}
+              size={32}
+              color={saved ? 'gold' : Colors.text}
+            />
+          </Animated.View>
+        </TouchableOpacity>
+      </View>
+      {/* Bottom Sheet for Share */}
+      {showSheet && (
+        <Animated.View style={styles.bottomSheet}>
+          <View style={styles.sheetHandle} />
+          <Text style={styles.sheetTitle}>Share</Text>
+          <TouchableOpacity onPress={closeSheet} style={styles.sheetClose}>
+            <Ionicons name="close" size={28} color="#fff" />
+          </TouchableOpacity>
+          {/* Add your share options here */}
         </Animated.View>
       )}
+    </View>
+  );
+};
 
-      {/* Right Navigation Bar */}
-      <RightNavBar 
-        isVisible={showNavBar}
-        onClose={() => setShowNavBar(false)}
+export default function IndexScreen() {
+  const [factIndex, setFactIndex] = useState(0);
+  return (
+    <SafeAreaView style={styles.root}>
+      <View style={styles.header}>
+        <Text style={styles.headerText}>DOPA</Text>
+        <TouchableOpacity
+          style={styles.streakButton}
+          onPress={() => router.push('/streak')}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="flame" size={28} color="#fff" />
+        </TouchableOpacity>
+      </View>
+      <FlatList
+        data={MOCK_FACTS}
+        pagingEnabled
+        showsVerticalScrollIndicator={false}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => <FactCarousel fact={item} />}
+        style={{ flex: 1 }}
+        onMomentumScrollEnd={(e) => {
+          const idx = Math.round(e.nativeEvent.contentOffset.y / SCREEN_HEIGHT);
+          setFactIndex(idx);
+        }}
+        getItemLayout={(_, index) => ({
+          length: SCREEN_HEIGHT,
+          offset: SCREEN_HEIGHT * index,
+          index,
+        })}
       />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
+    backgroundColor: Colors.background,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-  },
-  streakContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 107, 107, 0.1)',
-  },
-  streakIcon: {
-    fontSize: 24,
-    marginRight: 4,
-  },
-  streakText: {
-    fontSize: 18,
-    fontFamily: 'SpaceMono',
-  },
-  coinsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(244, 114, 182, 0.1)',
-  },
-  coinsIcon: {
-    fontSize: 24,
-    marginRight: 4,
-  },
-  coinsText: {
-    fontSize: 18,
-    fontFamily: 'SpaceMono',
-  },
-  cardContainer: {
     position: 'absolute',
-    top: SCREEN_HEIGHT * 0.15,
-    left: 20,
-    right: 20,
-    height: SCREEN_HEIGHT * 0.6,
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  cardGradient: {
-    flex: 1,
-    padding: 1, // Creates border effect
-  },
-  card: {
-    flex: 1,
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#000',
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 20 : 50,
+    paddingBottom: 25,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 20,
+    zIndex: 50,
   },
-  topicContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginBottom: 30,
+  headerText: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: 'bold',
+    fontFamily: 'SF-Pro-Display',
+    alignSelf: 'center',
+    marginTop: 10,
   },
-  topicIcon: {
-    fontSize: 24,
-    marginRight: 8,
-  },
-  topic: {
-    fontSize: 16,
-    fontFamily: 'SpaceMono',
-    fontWeight: '600',
-  },
-  fact: {
-    fontSize: 24,
-    fontFamily: 'SpaceMono',
-    textAlign: 'center',
-    lineHeight: 32,
-    paddingHorizontal: 20,
-  },
-  hintContainer: {
+  streakButton: {
     position: 'absolute',
-    bottom: 20,
-    alignItems: 'center',
+    right: 24,
+    top: Platform.OS === 'android' ? (StatusBar.currentHeight || 20) + 8 : 58,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    zIndex: 100,
   },
-  hintText: {
-    fontSize: 14,
-    fontFamily: 'SpaceMono',
-    marginTop: 4,
+  dim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#000',
+    opacity: 0,
+    zIndex: 1,
+  },
+  cardContainer: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+    backgroundColor: Colors.cardBackground,
+  },
+  mediaContainer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
+  },
+  media: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+  },
+  overlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    padding: 24,
+    zIndex: 2,
+  },
+  bottomRight: {
+    position: 'absolute',
+    right: 15,
+    bottom: 100,
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  bottomSheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#18181b',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    minHeight: 220,
+    zIndex: 100,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  sheetHandle: {
+    width: 48,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#333',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  sheetTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  sheetClose: {
+    position: 'absolute',
+    top: 18,
+    right: 18,
   },
 });

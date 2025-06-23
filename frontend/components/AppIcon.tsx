@@ -1,30 +1,231 @@
-import React from 'react';
-import Svg, { Circle, Path, G } from 'react-native-svg';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface AppIconProps {
-  width?: number;
-  height?: number;
-  color?: string;
+  source?: string;
+  size?: number;
+  animated?: boolean;
+  onAnimationComplete?: () => void;
+  isEntryAnimation?: boolean;
 }
 
-export const AppIcon = ({ width = 120, height = 120, color = '#4285F4' }: AppIconProps) => (
-  <Svg width={width} height={height} viewBox="0 0 120 120">
-    <Circle cx="60" cy="60" r="60" fill={color} />
-    <G fill="white">
-      {/* Stylized "D" for Dopa */}
-      <Path
-        d="M40 30h20c16.569 0 30 13.431 30 30 0 16.569-13.431 30-30 30H40V30zm20 50c11.046 0 20-8.954 20-20s-8.954-20-20-20H50v40h10z"
-      />
-      {/* Dopamine molecule representation */}
-      <Circle cx="45" cy="45" r="4" />
-      <Circle cx="75" cy="45" r="4" />
-      <Circle cx="60" cy="75" r="4" />
-      <Path
-        d="M45 45L75 45M60 75L75 45M60 75L45 45"
-        stroke="white"
-        strokeWidth="2"
-        fill="none"
-      />
-    </G>
-  </Svg>
-); 
+export function AppIcon({
+  source,
+  size = 60,
+  animated = false,
+  onAnimationComplete,
+  isEntryAnimation = false,
+}: AppIconProps) {
+  const scale = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const letterAnimations = useRef([
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0),
+  ]).current;
+
+  useEffect(() => {
+    if (animated) {
+      if (isEntryAnimation) {
+        // Entry animation: letters appear one by one
+        const letterSequence = letterAnimations.map((letterAnim, index) =>
+          Animated.timing(letterAnim, {
+            toValue: 1,
+            duration: 300,
+            delay: index * 200,
+            useNativeDriver: true,
+          })
+        );
+
+        Animated.sequence([
+          Animated.parallel(letterSequence),
+          Animated.delay(500),
+          Animated.parallel([
+            Animated.timing(scale, {
+              toValue: 1,
+              duration: 600,
+              useNativeDriver: true,
+            }),
+            Animated.timing(opacity, {
+              toValue: 1,
+              duration: 600,
+              useNativeDriver: true,
+            }),
+          ]),
+        ]).start(() => {
+          if (onAnimationComplete) {
+            onAnimationComplete();
+          }
+        });
+      } else {
+        // Regular animation
+        Animated.parallel([
+          Animated.timing(scale, {
+            toValue: 1,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+          Animated.timing(opacity, {
+            toValue: 1,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          if (onAnimationComplete) {
+            onAnimationComplete();
+          }
+        });
+      }
+    } else {
+      // No animation
+      scale.setValue(1);
+      opacity.setValue(1);
+      letterAnimations.forEach((anim) => anim.setValue(1));
+    }
+  }, [animated, isEntryAnimation]);
+
+  if (isEntryAnimation) {
+    return (
+      <View style={styles.entryContainer}>
+        <Animated.View
+          style={[
+            styles.letterContainer,
+            {
+              transform: [
+                { scale: scale },
+                {
+                  translateY: letterAnimations[0].interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [50, 0],
+                  }),
+                },
+              ],
+              opacity: letterAnimations[0],
+            },
+          ]}
+        >
+          <Text style={[styles.letter, { fontSize: size * 0.8 }]}>D</Text>
+        </Animated.View>
+        <Animated.View
+          style={[
+            styles.letterContainer,
+            {
+              transform: [
+                { scale: scale },
+                {
+                  translateY: letterAnimations[1].interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [50, 0],
+                  }),
+                },
+              ],
+              opacity: letterAnimations[1],
+            },
+          ]}
+        >
+          <Text style={[styles.letter, { fontSize: size * 0.8 }]}>O</Text>
+        </Animated.View>
+        <Animated.View
+          style={[
+            styles.letterContainer,
+            {
+              transform: [
+                { scale: scale },
+                {
+                  translateY: letterAnimations[2].interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [50, 0],
+                  }),
+                },
+              ],
+              opacity: letterAnimations[2],
+            },
+          ]}
+        >
+          <Text style={[styles.letter, { fontSize: size * 0.8 }]}>P</Text>
+        </Animated.View>
+        <Animated.View
+          style={[
+            styles.letterContainer,
+            {
+              transform: [
+                { scale: scale },
+                {
+                  translateY: letterAnimations[3].interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [50, 0],
+                  }),
+                },
+              ],
+              opacity: letterAnimations[3],
+            },
+          ]}
+        >
+          <Text style={[styles.letter, { fontSize: size * 0.8 }]}>A</Text>
+        </Animated.View>
+      </View>
+    );
+  }
+
+  return (
+    <Animated.View
+      style={[
+        styles.container,
+        {
+          width: size,
+          height: size,
+          transform: [{ scale }],
+          opacity,
+        },
+      ]}
+    >
+      <LinearGradient
+        colors={['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4']}
+        style={[styles.gradient, { borderRadius: size / 2 }]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <Text style={[styles.text, { fontSize: size * 0.4 }]}>DOPA</Text>
+      </LinearGradient>
+    </Animated.View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  entryContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  letterContainer: {
+    marginHorizontal: 2,
+  },
+  letter: {
+    fontWeight: 'bold',
+    color: '#ffffff',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  gradient: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  text: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+});

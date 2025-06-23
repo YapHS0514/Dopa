@@ -1,7 +1,12 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { SymbolWeight, SymbolView } from 'expo-symbols';
 import React from 'react';
-import { OpaqueColorValue, StyleProp, ViewStyle } from 'react-native';
+import {
+  OpaqueColorValue,
+  StyleProp,
+  TextStyle,
+  ViewStyle,
+} from 'react-native';
 
 // Add your SFSymbol to MaterialIcons mappings here.
 const MAPPING = {
@@ -11,7 +16,7 @@ const MAPPING = {
   'paperplane.fill': 'send',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
-  'magnifyingglass': 'search',
+  magnifyingglass: 'search',
   'bookmark.fill': 'bookmark',
   'person.fill': 'person',
 } as Partial<
@@ -58,7 +63,7 @@ export function IconSymbol({
           color={color}
           size={size}
           name={MAPPING[name] ?? 'help'}
-          style={style}
+          style={style as StyleProp<TextStyle>}
         />
       }
     />

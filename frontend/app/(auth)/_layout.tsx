@@ -38,11 +38,14 @@ export default function AuthLayout() {
   return (
     <Stack
       screenOptions={{
-        headerShown: false,
-        contentStyle: {
-          backgroundColor: Colors.primary,
+        headerStyle: {
+          backgroundColor: Colors.background,
         },
-        animation: 'fade',
+        headerTintColor: Colors.text,
+        headerTitleStyle: {
+          fontFamily: 'SF-Pro-Display',
+        },
+        headerShadowVisible: false,
       }}
     >
       <Stack.Screen
@@ -60,3 +63,4 @@ export default function AuthLayout() {
     </Stack>
   );
 }
+

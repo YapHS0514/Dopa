@@ -17,6 +17,7 @@
     "@sentry/react-native": "^6.15.1",
     "dotenv": "^16.5.0",
     "expo": "^53.0.11",
+    "expo-av": "^15.1.6",
     "logger": "^0.0.1"
   }
 }

@@ -1,86 +1,66 @@
-import { Tabs, Redirect } from 'expo-router';
-import { Platform, View } from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { Colors } from '../../constants/Colors';
-import { usePathname } from 'expo-router';
-import { useAuth } from '../../hooks/useAuth';
+import React from 'react';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Ionicons } from '@expo/vector-icons';
+import { Platform, SafeAreaView } from 'react-native';
+import IndexScreen from './index';
+import SavedScreen from './saved';
+import ProgressScreen from './progress';
+// import StreakScreen from './streak';
+import ProfileScreen from './profile';
 
-export default function TabLayout() {
-  const { user } = useAuth();
-  const pathname = usePathname();
-  const isIndexTab = pathname === '/(tabs)/' || pathname === '/(tabs)/index';
+const Tab = createBottomTabNavigator();
 
-  // If not authenticated, redirect to login
-  if (!user) {
-    return <Redirect href="/(auth)/login" />;
-  }
-
-  if (isIndexTab) {
-    return null; // Don't show tab bar on index tab
-  }
-
+export default function TabsLayout() {
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.primary }}>
-      <Tabs
-        screenOptions={{
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+          tabBarShowLabel: false,
+          headerShown: false,
           tabBarStyle: {
             position: 'absolute',
-            bottom: Platform.OS === 'ios' ? 30 : 20,
-            left: 20,
-            right: 20,
-            height: 65,
-            backgroundColor: Colors.tabBarBackground,
+            bottom: 0,
+            height: 70,
+            paddingBottom: Platform.OS === 'android' ? 80 : 10,
+            backgroundColor: 'black',
             borderTopWidth: 0,
-            elevation: 0,
-            borderRadius: 20,
-            overflow: 'hidden',
-            borderWidth: 1,
-            borderColor: Colors.textSecondary,
           },
-          tabBarActiveTintColor: Colors.tabBarIcon,
-          tabBarInactiveTintColor: Colors.tabBarIconInactive,
-          headerShown: false,
-          tabBarLabelStyle: {
-            fontFamily: 'Inter',
-            fontSize: 12,
-            marginBottom: 5,
+          tabBarIcon: ({ focused, color, size }) => {
+            let iconName = '';
+            switch (route.name) {
+              case 'Explore':
+                iconName = focused ? 'compass' : 'compass-outline';
+                break;
+              case 'Saved':
+                iconName = focused ? 'bookmark' : 'bookmark-outline';
+                break;
+              case 'Progress':
+                iconName = focused ? 'bar-chart' : 'bar-chart-outline';
+                break;
+              case 'Streak':
+                iconName = focused ? 'flame' : 'flame-outline';
+                break;
+              case 'Profile':
+                iconName = focused ? 'person' : 'person-outline';
+                break;
+              default:
+                iconName = 'ellipse';
+            }
+            return (
+              <Ionicons
+                name={iconName as any}
+                size={28}
+                color={focused ? '#fff' : '#888'}
+              />
+            );
           },
-          tabBarIconStyle: {
-            marginTop: 5,
-          },
-          tabBarBackground: () => (
-            <View style={{ flex: 1, backgroundColor: Colors.tabBarBackground }} />
-          ),
-        }}
+        })}
       >
-        <Tabs.Screen
-          name="index"
-          options={{
-            title: 'Learn',
-            tabBarIcon: ({ color, size }) => (
-              <Feather name="compass" size={size} color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="saved"
-          options={{
-            title: 'Saved',
-            tabBarIcon: ({ color, size }) => (
-              <Feather name="bookmark" size={size} color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="progress"
-          options={{
-            title: 'Progress',
-            tabBarIcon: ({ color, size }) => (
-              <Feather name="trending-up" size={size} color={color} />
-            ),
-          }}
-        />
-      </Tabs>
-    </View>
+        <Tab.Screen name="Explore" component={IndexScreen} />
+        <Tab.Screen name="Saved" component={SavedScreen} />
+        <Tab.Screen name="Progress" component={ProgressScreen} />
+        <Tab.Screen name="Profile" component={ProfileScreen} />
+      </Tab.Navigator>
+    </SafeAreaView>
   );
 }

@@ -34,7 +34,7 @@ const MOCK_SAVED_FACTS = [
   },
   {
     id: '3',
-    fact: 'The ocean contains 97% of Earth\'s water.',
+    fact: "The ocean contains 97% of Earth's water.",
     topic: 'Nature',
     icon: '🌊',
     color: Colors.topics.Nature,
@@ -49,7 +49,10 @@ const MOCK_SAVED_FACTS = [
 ];
 
 export default function SavedScreen() {
-  const renderSavedItem = (item: typeof MOCK_SAVED_FACTS[0]) => (
+  const theme = useStore((state) => state.theme);
+  const isDark = theme === 'dark';
+
+  const renderSavedItem = (item: (typeof MOCK_SAVED_FACTS)[0]) => (
     <TouchableOpacity
       key={item.id}
       style={styles.gridItem}
@@ -61,15 +64,21 @@ export default function SavedScreen() {
         colors={[`${item.color}20`, 'transparent']}
         style={styles.gridItemGradient}
       >
-        <View style={styles.gridItemContent}>
-          <View style={[styles.topicBadge, { backgroundColor: `${item.color}20` }]}>
+        <BlurView
+          intensity={100}
+          tint={isDark ? 'dark' : 'light'}
+          style={styles.gridItemContent}
+        >
+          <View
+            style={[styles.topicBadge, { backgroundColor: `${item.color}20` }]}
+          >
             <Text style={styles.topicIcon}>{item.icon}</Text>
             <Text style={[styles.topicText, { color: item.color }]}>
               {item.topic}
             </Text>
           </View>
-          <Text 
-            style={styles.factText}
+          <Text
+            style={[styles.factText, { color: Colors.text }]}
             numberOfLines={4}
           >
             {item.fact}
@@ -80,29 +89,32 @@ export default function SavedScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: Colors.background }]}
+    >
       <View style={styles.header}>
-        <Text style={styles.title}>
-          Saved Facts
-        </Text>
-        <View style={styles.savesCounter}>
-          <Text style={styles.savesText}>
+        <Text style={[styles.title, { color: Colors.text }]}>Saved Facts</Text>
+        <View
+          style={[
+            styles.savesCounter,
+            {
+              backgroundColor: Colors.cardBackground,
+            },
+          ]}
+        >
+          <Text style={[styles.savesText, { color: Colors.textSecondary }]}>
             Saves remaining:
           </Text>
-          <Text style={styles.savesNumber}>
-            8/10
-          </Text>
+          <Text style={[styles.savesNumber, { color: Colors.text }]}>8/10</Text>
         </View>
       </View>
 
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.grid}>
-          {MOCK_SAVED_FACTS.map(renderSavedItem)}
-        </View>
+        <View style={styles.grid}>{MOCK_SAVED_FACTS.map(renderSavedItem)}</View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -118,8 +130,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 32,
-    fontFamily: 'Inter-Bold',
-    color: Colors.textPrimary,
+    fontFamily: 'SF-Pro-Display',
     marginBottom: 16,
   },
   savesCounter: {
@@ -132,13 +143,12 @@ const styles = StyleSheet.create({
   },
   savesText: {
     fontSize: 16,
-    fontFamily: 'Inter',
-    color: Colors.textSecondary,
+    fontFamily: 'SF-Pro-Display',
   },
   savesNumber: {
     fontSize: 16,
-    fontFamily: 'Inter-Medium',
-    color: Colors.textPrimary,
+    fontFamily: 'SF-Pro-Display',
+    fontWeight: '600',
   },
   scrollView: {
     flex: 1,
@@ -183,12 +193,12 @@ const styles = StyleSheet.create({
   },
   topicText: {
     fontSize: 12,
-    fontFamily: 'Inter-Medium',
+    fontFamily: 'SF-Pro-Display',
     fontWeight: '600',
   },
   factText: {
     fontSize: 14,
-    fontFamily: 'Inter',
+    fontFamily: 'SF-Pro-Display',
     lineHeight: 20,
     color: Colors.textPrimary,
   },
