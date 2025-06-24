@@ -17,6 +17,7 @@ import { Colors } from '../../constants/Colors';
 import { AuthContext } from '../../contexts/AuthContext';
 import { GlobalStyles } from '../../constants/GlobalStyles';
 import { Ionicons } from '@expo/vector-icons';
+import GoogleSignInButton from '../../components/GoogleSignInButton';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -24,7 +25,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn } = React.useContext(AuthContext);
+  const { signIn, signInWithGoogle } = React.useContext(AuthContext);
   const [showForm, setShowForm] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const isMounted = useRef(true);
@@ -37,6 +38,7 @@ export default function LoginScreen() {
   const shrinkAnim = useRef(new Animated.Value(1)).current;
   const moveAnim = useRef(new Animated.Value(0)).current;
   const formFade = useRef(new Animated.Value(0)).current;
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   useEffect(() => {
     isMounted.current = true;
@@ -110,6 +112,18 @@ export default function LoginScreen() {
       Alert.alert('Error', error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    try {
+      await signInWithGoogle();
+      router.replace('/(tabs)');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to sign in with Google');
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -214,6 +228,15 @@ export default function LoginScreen() {
                 {loading ? 'Logging in...' : 'Login'}
               </Text>
             </TouchableOpacity>
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
+            <GoogleSignInButton 
+              onPress={handleGoogleSignIn} 
+              loading={googleLoading} 
+            />
             <View style={styles.footer}>
               <Text style={GlobalStyles.text}>Don't have an account? </Text>
               <Link href="/(auth)/register" asChild>
@@ -296,5 +319,20 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: -18,
     justifyContent: 'center',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e0e0e0',
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    color: '#666',
+    fontSize: 14,
   },
 });
