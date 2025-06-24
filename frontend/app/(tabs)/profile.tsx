@@ -64,7 +64,6 @@ export default function ProfileScreen() {
     <TouchableOpacity
       key={item.id}
       style={[styles.settingItem, { backgroundColor: Colors.cardBackground }]}
-      style={[styles.settingItem, { backgroundColor: Colors.cardBackground }]}
       onPress={() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         // Handle setting item press
@@ -78,7 +77,6 @@ export default function ProfileScreen() {
       </View>
       {item.value && (
         <View style={styles.settingRight}>
-          <Text style={[styles.settingValue, { color: Colors.textSecondary }]}>
           <Text style={[styles.settingValue, { color: Colors.textSecondary }]}>
             {item.value}
           </Text>
@@ -115,10 +113,8 @@ export default function ProfileScreen() {
             {MOCK_USER.name}
           </Text>
           <Text style={[styles.email, { color: Colors.textSecondary }]}>
-          <Text style={[styles.email, { color: Colors.textSecondary }]}>
             {MOCK_USER.email}
           </Text>
-          <Text style={[styles.joinDate, { color: Colors.textSecondary }]}>
           <Text style={[styles.joinDate, { color: Colors.textSecondary }]}>
             Joined {MOCK_USER.joinDate}
           </Text>

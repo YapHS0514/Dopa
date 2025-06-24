@@ -17,6 +17,7 @@ interface AuthContextType {
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   checkOnboardingStatus: () => Promise<boolean>;
   completeOnboarding: () => Promise<void>;
@@ -28,6 +29,7 @@ export const AuthContext = createContext<AuthContextType>({
   loading: true,
   signUp: async () => {},
   signIn: async () => {},
+  signInWithGoogle: async () => {},
   signInWithGoogle: async () => {},
   signOut: async () => {},
   checkOnboardingStatus: async () => false,
@@ -146,7 +148,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const signInWithGoogle = async () => {
+    try {
+      const redirectUrl = AuthSession.makeRedirectUri({
+        scheme: 'com.dopa.boltexponativewind',
+      });
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.url) {
+        const result = await WebBrowser.openAuthSessionAsync(
+          data.url,
+          redirectUrl
+        );
+
+        if (result.type === 'success' && result.url) {
+          const url = new URL(result.url);
+          const fragments = new URLSearchParams(url.hash.substring(1));
+          const accessToken = fragments.get('access_token');
+          const refreshToken = fragments.get('refresh_token');
+
+          if (accessToken) {
+            const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken || '',
+            });
+
+            if (sessionError) throw sessionError;
+          }
+        } else if (result.type === 'cancel') {
+          throw new Error('Authentication was cancelled');
+        }
+      }
+    } catch (error: any) {
+      console.error('Google Sign-In Error:', error);
+      throw error;
+    }
+  };
+
   const signOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+    } catch (error) {
+      console.error('Sign out error:', error);
+      throw error;
+    }
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
@@ -162,6 +217,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     signUp,
     signIn,
+    signInWithGoogle,
     signInWithGoogle,
     signOut,
     checkOnboardingStatus,

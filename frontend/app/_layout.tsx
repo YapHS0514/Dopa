@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import React, { useState } from 'react';
 import {
   DarkTheme,
   DefaultTheme,
@@ -9,6 +10,7 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from '../contexts/AuthContext';
 import { Colors } from '../constants/Colors';
+// import { SplashScreen as AppSplashScreen } from '../components/SplashScreen';
 // import { SplashScreen as AppSplashScreen } from '../components/SplashScreen';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -37,10 +39,13 @@ export default function RootLayout() {
   const [showSplash, setShowSplash] = useState(true);
   const [loaded] = useFonts({
     'SF-Pro-Display': require('../assets/fonts/SFPRODISPLAYREGULAR.otf'),
+    'SF-Pro-Display': require('../assets/fonts/SFPRODISPLAYREGULAR.otf'),
   });
+
 
   const theme = useStore((state) => state.theme);
   const isDark = theme === 'dark' || colorScheme === 'dark';
+  const [showSplash, setShowSplash] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
@@ -52,6 +57,10 @@ export default function RootLayout() {
       return () => clearTimeout(timer);
     }
   }, [loaded]);
+
+  const handleSplashComplete = () => {
+    setShowSplash(false);
+  };
 
   const handleSplashComplete = () => {
     setShowSplash(false);
@@ -70,10 +79,24 @@ export default function RootLayout() {
   //   );
   // }
 
+  // if (showSplash) {
+  //   return (
+  //     <View style={{ flex: 1, backgroundColor: '#000000' }}>
+  //       <StatusBar style="light" />
+  //       <AppSplashScreen onAnimationComplete={handleSplashComplete} />
+  //     </View>
+  //   );
+  // }
+
   return (
+    <View style={{ flex: 1, backgroundColor: '#000000' }}>
     <View style={{ flex: 1, backgroundColor: '#000000' }}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <AuthProvider>
+          <ThemeProvider
+            value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}
+          >
+            <StatusBar style="light" />
           <ThemeProvider
             value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}
           >
@@ -82,6 +105,7 @@ export default function RootLayout() {
               screenOptions={{
                 headerShown: false,
                 contentStyle: {
+                  backgroundColor: '#000000',
                   backgroundColor: '#000000',
                 },
               }}

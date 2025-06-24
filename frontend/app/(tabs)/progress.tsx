@@ -18,6 +18,7 @@ import { Feather } from '@expo/vector-icons';
 import * as Progress from 'react-native-progress';
 import * as Animatable from 'react-native-animatable';
 import { router } from 'expo-router';
+import { router } from 'expo-router';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const STAT_CARD_WIDTH = (SCREEN_WIDTH - 60) / 2;
@@ -60,6 +61,36 @@ const MOCK_DATA = {
       icon: '🌿',
       description: 'Master 50 nature facts',
     },
+    {
+      id: '1',
+      name: 'Early Bird',
+      icon: '🌅',
+      description: 'Complete 5 facts before 9 AM',
+    },
+    {
+      id: '2',
+      name: 'Night Owl',
+      icon: '🦉',
+      description: 'Complete 5 facts after 10 PM',
+    },
+    {
+      id: '3',
+      name: 'Science Whiz',
+      icon: '🧬',
+      description: 'Master 50 science facts',
+    },
+    {
+      id: '4',
+      name: 'Space Explorer',
+      icon: '🚀',
+      description: 'Master 50 space facts',
+    },
+    {
+      id: '5',
+      name: 'Nature Lover',
+      icon: '🌿',
+      description: 'Master 50 nature facts',
+    },
   ],
 };
 
@@ -69,12 +100,15 @@ export default function ProgressScreen() {
   const [showBadgesModal, setShowBadgesModal] = useState(false);
 
   const renderBadge = (badge: (typeof MOCK_DATA.badges)[0]) => (
+  const renderBadge = (badge: (typeof MOCK_DATA.badges)[0]) => (
     <TouchableOpacity
       key={badge.id}
       style={[styles.badge, { backgroundColor: Colors.cardBackground }]}
       style={[styles.badge, { backgroundColor: Colors.cardBackground }]}
+      style={[styles.badge, { backgroundColor: Colors.cardBackground }]}
     >
       <Text style={styles.badgeIcon}>{badge.icon}</Text>
+      <Text style={[styles.badgeName, { color: Colors.text }]}>
       <Text style={[styles.badgeName, { color: Colors.text }]}>
         {badge.name}
       </Text>
@@ -89,7 +123,15 @@ export default function ProgressScreen() {
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
       >
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: Colors.background }]}
+    >
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
+          <Text style={[styles.title, { color: Colors.text }]}>
           <Text style={[styles.title, { color: Colors.text }]}>
             Progress 🔥
           </Text>
@@ -103,8 +145,11 @@ export default function ProgressScreen() {
           >
             <BlurView intensity={100} tint={theme} style={styles.weeklyContent}>
               <Text style={[styles.weeklyTitle, { color: Colors.text }]}>
+            <BlurView intensity={100} tint={theme} style={styles.weeklyContent}>
+              <Text style={[styles.weeklyTitle, { color: Colors.text }]}>
                 This Week
               </Text>
+              <Text style={[styles.weeklyStats, { color: Colors.text }]}>
               <Text style={[styles.weeklyStats, { color: Colors.text }]}>
                 You've learned {MOCK_DATA.weeklyFacts} new facts! 🎉
               </Text>
@@ -114,13 +159,17 @@ export default function ProgressScreen() {
           <View style={styles.levelProgress}>
             <View style={styles.levelHeader}>
               <Text style={[styles.levelText, { color: Colors.text }]}>
+              <Text style={[styles.levelText, { color: Colors.text }]}>
                 Level {MOCK_DATA.level}
               </Text>
+              <Text style={[styles.xpText, { color: Colors.textSecondary }]}>
               <Text style={[styles.xpText, { color: Colors.textSecondary }]}>
               <Text style={[styles.xpText, { color: Colors.textSecondary }]}>
                 {MOCK_DATA.totalXP} / {MOCK_DATA.nextLevelXP} XP
               </Text>
             </View>
+            <View
+              style={[styles.progressBar, { backgroundColor: Colors.border }]}
             <View
               style={[styles.progressBar, { backgroundColor: Colors.border }]}
             >
@@ -130,6 +179,11 @@ export default function ProgressScreen() {
                 end={{ x: 1, y: 0 }}
                 style={[
                   styles.progressFill,
+                  {
+                    width: `${
+                      (MOCK_DATA.totalXP / MOCK_DATA.nextLevelXP) * 100
+                    }%`,
+                  },
                   {
                     width: `${
                       (MOCK_DATA.totalXP / MOCK_DATA.nextLevelXP) * 100
@@ -164,7 +218,38 @@ export default function ProgressScreen() {
                 </Text>
               </View>
             </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push('/streak')}
+              activeOpacity={0.7}
+            >
+              <View
+                style={[
+                  styles.statCard,
+                  {
+                    backgroundColor: Colors.cardBackground,
+                  },
+                ]}
+              >
+                <Text style={styles.statIcon}>🔥</Text>
+                <Text style={[styles.statValue, { color: Colors.text }]}>
+                  {MOCK_DATA.currentStreak}
+                </Text>
+                <Text
+                  style={[styles.statLabel, { color: Colors.textSecondary }]}
+                >
+                  Current Streak
+                </Text>
+              </View>
+            </TouchableOpacity>
 
+            <View
+              style={[
+                styles.statCard,
+                {
+                  backgroundColor: Colors.cardBackground,
+                },
+              ]}
+            >
             <View
               style={[
                 styles.statCard,
@@ -175,8 +260,10 @@ export default function ProgressScreen() {
             >
               <Text style={styles.statIcon}>🧠</Text>
               <Text style={[styles.statValue, { color: Colors.text }]}>
+              <Text style={[styles.statValue, { color: Colors.text }]}>
                 {MOCK_DATA.totalFacts}
               </Text>
+              <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
               <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
               <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
                 Total Facts
@@ -191,10 +278,20 @@ export default function ProgressScreen() {
                 },
               ]}
             >
+            <View
+              style={[
+                styles.statCard,
+                {
+                  backgroundColor: Colors.cardBackground,
+                },
+              ]}
+            >
               <Text style={styles.statIcon}>⭐</Text>
+              <Text style={[styles.statValue, { color: Colors.text }]}>
               <Text style={[styles.statValue, { color: Colors.text }]}>
                 {MOCK_DATA.totalXP}
               </Text>
+              <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
               <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
               <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
                 Total XP
@@ -209,10 +306,20 @@ export default function ProgressScreen() {
                 },
               ]}
             >
+            <View
+              style={[
+                styles.statCard,
+                {
+                  backgroundColor: Colors.cardBackground,
+                },
+              ]}
+            >
               <Text style={styles.statIcon}>🎖️</Text>
+              <Text style={[styles.statValue, { color: Colors.text }]}>
               <Text style={[styles.statValue, { color: Colors.text }]}>
                 {MOCK_DATA.badges.length}
               </Text>
+              <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
               <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
               <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
                 Badges
@@ -223,18 +330,24 @@ export default function ProgressScreen() {
           <View style={styles.badgesSection}>
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: Colors.text }]}>
+              <Text style={[styles.sectionTitle, { color: Colors.text }]}>
                 Badges
               </Text>
+              <TouchableOpacity
               <TouchableOpacity
                 style={styles.viewAllButton}
                 onPress={() => setShowBadgesModal(true)}
               >
                 <Text style={[styles.viewAllText, { color: Colors.tint }]}>
+                <Text style={[styles.viewAllText, { color: Colors.tint }]}>
                   View All
                 </Text>
                 <Feather name="chevron-right" size={16} color={Colors.tint} />
+                <Feather name="chevron-right" size={16} color={Colors.tint} />
               </TouchableOpacity>
             </View>
+            <ScrollView
+              horizontal
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -254,17 +367,21 @@ export default function ProgressScreen() {
       >
         <View style={styles.modalOverlay}>
           <Animatable.View
+          <Animatable.View
             animation="fadeInUp"
             style={[
               styles.modalContent,
+              { backgroundColor: Colors.background },
               { backgroundColor: Colors.background },
             ]}
           >
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: Colors.text }]}>
+              <Text style={[styles.modalTitle, { color: Colors.text }]}>
                 Your Badges
               </Text>
               <TouchableOpacity onPress={() => setShowBadgesModal(false)}>
+                <Feather name="x" size={24} color={Colors.text} />
                 <Feather name="x" size={24} color={Colors.text} />
               </TouchableOpacity>
             </View>
@@ -282,9 +399,22 @@ export default function ProgressScreen() {
                       },
                     ]}
                   >
+                  <View
+                    style={[
+                      styles.modalBadgeIcon,
+                      {
+                        backgroundColor: `${
+                          item.icon.slice(1, 3) + item.icon.slice(4, 6)
+                        }20`,
+                      },
+                    ]}
+                  >
                     <Text style={styles.modalBadgeIconText}>{item.icon}</Text>
                   </View>
                   <View style={styles.modalBadgeInfo}>
+                    <Text
+                      style={[styles.modalBadgeName, { color: Colors.text }]}
+                    >
                     <Text
                       style={[styles.modalBadgeName, { color: Colors.text }]}
                     >
@@ -298,11 +428,20 @@ export default function ProgressScreen() {
                         },
                       ]}
                     >
+                    <Text
+                      style={[
+                        styles.modalBadgeDescription,
+                        {
+                          color: Colors.textSecondary,
+                        },
+                      ]}
+                    >
                       {item.description}
                     </Text>
                   </View>
                 </View>
               )}
+              keyExtractor={(item) => item.id}
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.modalBadgesList}
               showsVerticalScrollIndicator={false}
@@ -331,6 +470,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontFamily: 'SF-Pro-Display',
+    fontFamily: 'SF-Pro-Display',
   },
   content: {
     paddingHorizontal: 20,
@@ -347,10 +487,12 @@ const styles = StyleSheet.create({
   weeklyTitle: {
     fontSize: 20,
     fontFamily: 'SF-Pro-Display',
+    fontFamily: 'SF-Pro-Display',
     marginBottom: 8,
   },
   weeklyStats: {
     fontSize: 16,
+    fontFamily: 'SF-Pro-Display',
     fontFamily: 'SF-Pro-Display',
     lineHeight: 24,
   },
@@ -366,9 +508,11 @@ const styles = StyleSheet.create({
   levelText: {
     fontSize: 16,
     fontFamily: 'SF-Pro-Display',
+    fontFamily: 'SF-Pro-Display',
   },
   xpText: {
     fontSize: 14,
+    fontFamily: 'SF-Pro-Display',
     fontFamily: 'SF-Pro-Display',
   },
   progressBar: {
@@ -400,10 +544,12 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 24,
     fontFamily: 'SF-Pro-Display',
+    fontFamily: 'SF-Pro-Display',
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
+    fontFamily: 'SF-Pro-Display',
     fontFamily: 'SF-Pro-Display',
   },
   badgesSection: {
@@ -418,6 +564,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontFamily: 'SF-Pro-Display',
+    fontFamily: 'SF-Pro-Display',
   },
   viewAllButton: {
     flexDirection: 'row',
@@ -425,6 +572,7 @@ const styles = StyleSheet.create({
   },
   viewAllText: {
     fontSize: 14,
+    fontFamily: 'SF-Pro-Display',
     fontFamily: 'SF-Pro-Display',
     marginRight: 4,
   },
@@ -444,6 +592,7 @@ const styles = StyleSheet.create({
   },
   badgeName: {
     fontSize: 12,
+    fontFamily: 'SF-Pro-Display',
     fontFamily: 'SF-Pro-Display',
     textAlign: 'center',
   },
@@ -467,6 +616,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 24,
+    fontFamily: 'SF-Pro-Display',
     fontFamily: 'SF-Pro-Display',
   },
   modalBadgesList: {
@@ -494,11 +644,15 @@ const styles = StyleSheet.create({
   modalBadgeName: {
     fontSize: 16,
     fontFamily: 'SF-Pro-Display',
+    fontFamily: 'SF-Pro-Display',
     marginBottom: 4,
   },
   modalBadgeDescription: {
     fontSize: 14,
     fontFamily: 'SF-Pro-Display',
+    fontFamily: 'SF-Pro-Display',
     opacity: 0.8,
   },
+});
+
 });

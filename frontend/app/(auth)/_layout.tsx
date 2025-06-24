@@ -40,12 +40,17 @@ export default function AuthLayout() {
       screenOptions={{
         headerStyle: {
           backgroundColor: Colors.background,
+          backgroundColor: Colors.background,
         },
+        headerTintColor: Colors.text,
         headerTintColor: Colors.text,
         headerTitleStyle: {
           fontFamily: 'SF-Pro-Display',
+          fontFamily: 'SF-Pro-Display',
         },
         headerShadowVisible: false,
+      }}
+    >
       }}
     >
       <Stack.Screen
