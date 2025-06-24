@@ -6,23 +6,19 @@ import {
   Dimensions,
   FlatList,
   Animated,
-  PanResponder,
   TouchableOpacity,
-  Image,
   StatusBar,
   Linking,
-  Alert,
-  Share,
   Platform,
   SafeAreaView,
+  Image,
 } from 'react-native';
-import { GlobalStyles } from '../../constants/GlobalStyles';
 import { Colors } from '../../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { MOCK_FACTS } from '../../constants/MockData';
 import { ContentCard } from '../../components/ContentCard';
-import type { ListRenderItemInfo } from 'react-native';
-import { Audio } from 'expo-av';
+import ActionButtons from '../../components/ActionButtons';
+import StreakButton from '../../components/StreakButton';
 import { router } from 'expo-router';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -73,68 +69,12 @@ const getFactCards = (fact: Fact) => {
 const FactCarousel = ({ fact }: { fact: Fact }) => {
   const cards = getFactCards(fact);
   const [cardIndex, setCardIndex] = useState(0);
-  const [liked, setLiked] = useState(false);
-  const [listening, setListening] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [showSheet, setShowSheet] = useState(false);
-  const likeAnim = useRef(new Animated.Value(1)).current;
-  const listenAnim = useRef(new Animated.Value(1)).current;
-  const shareAnim = useRef(new Animated.Value(1)).current;
-  const saveAnim = useRef(new Animated.Value(1)).current;
 
-  // Animation for button press
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-  const animatePress = (anim: Animated.Value) => {
-    Animated.sequence([
-      Animated.spring(anim, { toValue: 0.85, useNativeDriver: true }),
-      Animated.spring(anim, {
-        toValue: 1,
-        friction: 3,
-        tension: 40,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
-  const handleLike = () => {
-    animatePress(likeAnim);
-    setLiked((l) => !l);
-  };
-  const handleSave = () => {
-    animatePress(saveAnim);
-    setSaved((s) => !s);
-  };
-  const handleListen = async () => {
-    animatePress(listenAnim);
-    if (!listening) {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission to use speaker denied.');
-        return;
-      }
-      try {
-        const { sound: newSound } = await Audio.Sound.createAsync(
-          require('../../assets/sound.mp3') // Update to your path
-        );
-        setSound(newSound);
-        await newSound.playAsync();
-        setListening(true);
-      } catch (e) {
-        Alert.alert('Audio error', 'Unable to play sound.');
-      }
-    } else {
-      if (sound) {
-        await sound.stopAsync();
-        await sound.unloadAsync();
-        setSound(null);
-      }
-      setListening(false);
-    }
-  };
   const handleShare = () => {
-    animatePress(shareAnim);
     setShowSheet(true);
   };
+  
   const closeSheet = () => setShowSheet(false);
 
   return (
@@ -183,47 +123,11 @@ const FactCarousel = ({ fact }: { fact: Fact }) => {
           setCardIndex(idx);
         }}
       />
-      {/* Right side buttons */}
-      <View style={styles.bottomRight}>
-        <TouchableOpacity onPress={handleLike} activeOpacity={0.7}>
-          <Animated.View
-            style={{ transform: [{ scale: likeAnim }], marginBottom: 25 }}
-          >
-            <Ionicons
-              name={'heart'}
-              size={32}
-              color={liked ? '#ef4444' : Colors.text}
-            />
-          </Animated.View>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={handleListen} activeOpacity={0.7}>
-          <Animated.View
-            style={{ transform: [{ scale: listenAnim }], marginBottom: 25 }}
-          >
-            <Ionicons
-              name={'volume-high'}
-              size={32}
-              color={listening ? 'gold' : Colors.text}
-            />
-          </Animated.View>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={handleShare} activeOpacity={0.7}>
-          <Animated.View
-            style={{ transform: [{ scale: shareAnim }], marginBottom: 25 }}
-          >
-            <Ionicons name={'share-social'} size={32} color={Colors.text} />
-          </Animated.View>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={handleSave} activeOpacity={0.7}>
-          <Animated.View style={{ transform: [{ scale: saveAnim }] }}>
-            <Ionicons
-              name={'bookmark'}
-              size={32}
-              color={saved ? 'gold' : Colors.text}
-            />
-          </Animated.View>
-        </TouchableOpacity>
-      </View>
+      {/* Action buttons positioned higher */}
+      <ActionButtons 
+        style={styles.actionButtons}
+        onShare={handleShare}
+      />
       {/* Bottom Sheet for Share */}
       {showSheet && (
         <Animated.View style={styles.bottomSheet}>
@@ -244,14 +148,19 @@ export default function IndexScreen() {
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.header}>
-        <Text style={styles.headerText}>DOPA</Text>
-        <TouchableOpacity
-          style={styles.streakButton}
-          onPress={() => router.push('/streak')}
+        <TouchableOpacity 
+          style={styles.logoButton}
+          onPress={() => Linking.openURL('https://bolt.new/')}
           activeOpacity={0.7}
         >
-          <Ionicons name="flame" size={28} color="#fff" />
+          <Image 
+            source={require('../../assets/images/white_circle_360x360.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
         </TouchableOpacity>
+        <Text style={styles.headerText}>DOPA</Text>
+        <StreakButton />
       </View>
       <FlatList
         data={MOCK_FACTS}
@@ -299,15 +208,17 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginTop: 10,
   },
-  streakButton: {
+  logoButton: {
     position: 'absolute',
-    right: 24,
+    left: 24,
     top: Platform.OS === 'android' ? (StatusBar.currentHeight || 20) + 8 : 58,
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.06)',
     zIndex: 100,
   },
+  logo: {
+    width: 80,
+    height: 80,
+  },
+
   dim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#000',
@@ -333,11 +244,10 @@ const styles = StyleSheet.create({
     padding: 24,
     zIndex: 2,
   },
-  bottomRight: {
+  actionButtons: {
     position: 'absolute',
     right: 15,
-    bottom: 100,
-    alignItems: 'center',
+    bottom: 200, // Positioned higher than before (was 100)
     zIndex: 10,
   },
   bottomSheet: {
