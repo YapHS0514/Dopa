@@ -1,6 +1,11 @@
 import React, { createContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Session, User } from '@supabase/supabase-js';
+import * as WebBrowser from 'expo-web-browser';
+import * as AuthSession from 'expo-auth-session';
+
+// Complete the auth session for web
+WebBrowser.maybeCompleteAuthSession();
 import { router } from 'expo-router';
 import { apiClient } from '../lib/api';
 import { Alert } from 'react-native';
@@ -11,6 +16,7 @@ interface AuthContextType {
   loading: boolean;
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   checkOnboardingStatus: () => Promise<boolean>;
   completeOnboarding: () => Promise<void>;
@@ -22,6 +28,7 @@ export const AuthContext = createContext<AuthContextType>({
   loading: true,
   signUp: async () => {},
   signIn: async () => {},
+  signInWithGoogle: async () => {},
   signOut: async () => {},
   checkOnboardingStatus: async () => false,
   completeOnboarding: async () => {},
@@ -86,80 +93,66 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) throw error;
+  };
+
+  const signInWithGoogle = async () => {
     try {
-      // First sign in through our API
-      console.log('Attempting to sign in through API...');
-      const response = await apiClient.signIn(email, password);
-      console.log('API signin response:', response);
-
-      // Then establish a Supabase session
-      console.log('Establishing Supabase session...');
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const redirectUrl = AuthSession.makeRedirectUri({
+        scheme: 'com.dopa.boltexponativewind',
       });
-      if (error) throw error;
-      console.log('Supabase session established');
 
-      // Check onboarding status and redirect accordingly
-      console.log(
-        'Checking onboarding status:',
-        response.profile.onboarding_completed
-      );
-      if (!response.profile.onboarding_completed) {
-        console.log('User not onboarded, redirecting to onboarding...');
-        router.replace('/onboarding');
-      } else {
-        console.log('User onboarded, redirecting to tabs...');
-        router.replace('/(tabs)');
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.url) {
+        const result = await WebBrowser.openAuthSessionAsync(
+          data.url,
+          redirectUrl
+        );
+
+        if (result.type === 'success' && result.url) {
+          const url = new URL(result.url);
+          const fragments = new URLSearchParams(url.hash.substring(1));
+          const accessToken = fragments.get('access_token');
+          const refreshToken = fragments.get('refresh_token');
+
+          if (accessToken) {
+            const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken || '',
+            });
+
+            if (sessionError) throw sessionError;
+          }
+        } else if (result.type === 'cancel') {
+          throw new Error('Authentication was cancelled');
+        }
       }
     } catch (error: any) {
-      console.error('Signin error:', error);
-      throw new Error(error.message);
+      console.error('Google Sign-In Error:', error);
+      throw error;
     }
   };
 
   const signOut = async () => {
     try {
-      // First sign out from Supabase to clear the session
-      const { error: supabaseError } = await supabase.auth.signOut();
-      if (supabaseError) throw supabaseError;
-
-      // Then sign out from our API
-      try {
-        await apiClient.signOut();
-      } catch (apiError) {
-        // If API signout fails, it's not critical since we've already cleared the Supabase session
-        console.warn('API signout failed, but continuing:', apiError);
-      }
-
-      // Clear the API client token
-      apiClient.setToken(null);
-
-      // Navigate to login
-      router.replace('/(auth)/login');
-    } catch (error: any) {
-      console.error('Signout error:', error);
-      throw new Error(error.message);
-    }
-  };
-
-  const checkOnboardingStatus = async () => {
-    try {
-      const profile = await apiClient.getProfile();
-      return profile.onboarding_completed;
-    } catch (error: any) {
-      console.error('Check onboarding error:', error);
-      throw new Error(error.message);
-    }
-  };
-
-  const completeOnboarding = async () => {
-    try {
-      await apiClient.completeOnboarding();
-    } catch (error: any) {
-      console.error('Complete onboarding error:', error);
-      throw new Error(error.message);
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+    } catch (error) {
+      console.error('Sign out error:', error);
+      throw error;
     }
   };
 
@@ -169,6 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     signUp,
     signIn,
+    signInWithGoogle,
     signOut,
     checkOnboardingStatus,
     completeOnboarding,
