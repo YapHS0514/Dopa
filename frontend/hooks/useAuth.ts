@@ -27,5 +27,7 @@ export function useAuth() {
       role: context.user.user_metadata?.role || 'user',
       metadata: context.user.user_metadata || {},
     } as User : null,
+    checkOnboardingStatus: context.checkOnboardingStatus,
+    completeOnboarding: context.completeOnboarding,
   };
 } 

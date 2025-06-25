@@ -10,6 +10,7 @@ export const Colors = {
   accent: '#F2F2F2',
   border: '#222222',
   button: '#000000',
+  disabled: '#4A4A4A',
   buttonText: '#F2F2F2',
   muted: '#B0B0B0',
   success: '#059669',

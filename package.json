@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "frontend": "cd frontend && npx expo start --lan",
-    "backend": "cd backend && call venv\\Scripts\\activate && uvicorn main:app --host 0.0.0.0 --port 8000 --reload",
+    "backend": "cd backend && call venv\\Scripts\\activate && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
     "dev": "concurrently \"npm run frontend\" \"npm run backend\"",
     "migrate": "cd supabase && npx supabase db push"
   },

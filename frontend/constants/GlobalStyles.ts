@@ -28,6 +28,20 @@ export const GlobalStyles = StyleSheet.create({
     backgroundColor: '#000000',
   },
   
+  screenContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  
+  heading: {
+    fontFamily: 'SF-Pro-Display',
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#F2F2F2',
+  },
+  
   // Global card styles
   card: {
     backgroundColor: '#222222',

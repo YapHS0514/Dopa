@@ -3,14 +3,12 @@ import Constants from 'expo-constants';
 import axios, { AxiosInstance } from 'axios';
 import { Platform } from 'react-native';
 
-// Get API URL from Expo config
+// Determine API URL from Expo config
 let API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL;
 
-// If we're on a physical device or emulator, replace 0.0.0.0 with the host IP
+// Handle emulator/device IP mapping
 if (Platform.OS !== 'web' && API_URL?.includes('0.0.0.0')) {
-  // Extract the port number
   const port = API_URL.split(':').pop();
-  // Get the host IP from the Expo manifest
   const hostUri = Constants.manifest2?.extra?.expoGo?.debuggerHost;
   if (hostUri) {
     const hostIp = hostUri.split(':')[0];
@@ -23,17 +21,37 @@ if (!API_URL) {
   console.error('API URL not found in Expo config');
 }
 
-console.log('API URL configured as:', API_URL); // Debug log
+console.log('API URL configured as:', API_URL);
 
 interface ApiError {
   detail: string;
   status?: number;
 }
 
+interface UserProfile {
+  id: string;
+  user_id: string;
+  email: string;
+  full_name?: string;
+  avatar_url?: string;
+  total_points: number;
+  streak_days: number;
+  last_active: string;
+  onboarding_completed: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface UserResponse {
+  id: string;
+  email: string;
+  profile: UserProfile;
+}
+
 class ApiClient {
   private baseUrl: string;
   private token: string | null = null;
-  private readonly timeout = 5000; // 5 second timeout
+  private readonly timeout = 5000;
   private readonly maxRetries = 3;
   private axiosInstance: AxiosInstance;
 
@@ -47,25 +65,20 @@ class ApiClient {
       },
     });
 
-    // Add response interceptor for error handling
     this.axiosInstance.interceptors.response.use(
       (response) => response,
       async (error) => {
         const config = error.config;
-        
-        // If the error has no config or we've already retried the maximum times, throw the error
+
         if (!config || config.__retryCount >= this.maxRetries) {
           return Promise.reject(error);
         }
 
-        // Increment the retry count
         config.__retryCount = config.__retryCount || 0;
         config.__retryCount++;
 
         console.log(`Retrying request to ${config.url}, ${this.maxRetries - config.__retryCount} attempts remaining`);
-
-        // Delay before retrying
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
 
         return this.axiosInstance(config);
       }
@@ -91,8 +104,13 @@ class ApiClient {
         status: error.response?.status,
         statusText: error.response?.statusText,
         url: error.config?.url,
-        data: error.response?.data
+        data: error.response?.data,
       });
+
+      if (error.response?.status === 429) {
+        throw new Error('Too many attempts. Please try again later.');
+      }
+
       throw new Error(error.response?.data?.detail || error.message);
     }
   }
@@ -108,27 +126,24 @@ class ApiClient {
     return this.handleRequest<T>(this.axiosInstance.post(endpoint, data));
   }
 
+  async put<T>(endpoint: string, data: any): Promise<T> {
+    console.log('Making PUT request to:', endpoint);
+    console.log('Request data:', data);
+    return this.handleRequest<T>(this.axiosInstance.put(endpoint, data));
+  }
+
   async delete<T>(endpoint: string): Promise<T> {
     console.log('Making DELETE request to:', endpoint);
     return this.handleRequest<T>(this.axiosInstance.delete(endpoint));
   }
 
-  async delete<T>(endpoint: string): Promise<T> {
-    console.log('Making DELETE request to:', endpoint);
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      method: 'DELETE',
-      headers: this.getHeaders(),
-    });
-    return this.handleResponse<T>(response);
-  }
-
-  // Content methods
+  // ✅ Content-related methods (from your version)
   async getContents(limit = 20, offset = 0, topicId?: string) {
     const params = new URLSearchParams({
       limit: limit.toString(),
       offset: offset.toString(),
     });
-    
+
     if (topicId) {
       params.append('topic_id', topicId);
     }
@@ -176,7 +191,6 @@ class ApiClient {
     return this.get(`/api/recommendations?limit=${limit}`);
   }
 
-  // Admin methods
   async createContent(content: {
     title: string;
     summary: string;
@@ -187,6 +201,27 @@ class ApiClient {
     estimated_read_time?: number;
   }) {
     return this.post('/api/contents', content);
+  }
+
+  // ✅ Auth-related methods (from your friend's version)
+  async signUp(email: string, password: string): Promise<UserResponse> {
+    return this.post('/api/auth/signup', { email, password });
+  }
+
+  async signIn(email: string, password: string): Promise<UserResponse> {
+    return this.post('/api/auth/signin', { email, password });
+  }
+
+  async signOut(): Promise<void> {
+    return this.post('/api/auth/signout', {});
+  }
+
+  async getProfile(): Promise<UserProfile> {
+    return this.get('/api/auth/profile');
+  }
+
+  async completeOnboarding(): Promise<void> {
+    return this.put('/api/auth/profile/onboarding', {});
   }
 }
 
