@@ -79,7 +79,7 @@ export default function SavedScreen() {
             </Text>
           </View>
           <Text
-            style={[styles.factText, { color: Colors.text }]}
+            style={[styles.factText, { color: isDark ? Colors.text : '#000000' }]}
             numberOfLines={4}
           >
             {item.fact}

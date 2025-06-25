@@ -1,29 +1,22 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Dimensions,
   FlatList,
-  Animated,
-  PanResponder,
   TouchableOpacity,
-  Image,
   StatusBar,
   Linking,
-  Alert,
-  Share,
   Platform,
   SafeAreaView,
+  Image,
 } from 'react-native';
-import { GlobalStyles } from '../../constants/GlobalStyles';
 import { Colors } from '../../constants/Colors';
-import { Ionicons } from '@expo/vector-icons';
 import { MOCK_FACTS } from '../../constants/MockData';
 import { ContentCard } from '../../components/ContentCard';
-import type { ListRenderItemInfo } from 'react-native';
-import { Audio } from 'expo-av';
-import { router } from 'expo-router';
+import ActionButtons from '../../components/ActionButtons';
+import StreakButton from '../../components/StreakButton';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -73,69 +66,6 @@ const getFactCards = (fact: Fact) => {
 const FactCarousel = ({ fact }: { fact: Fact }) => {
   const cards = getFactCards(fact);
   const [cardIndex, setCardIndex] = useState(0);
-  const [liked, setLiked] = useState(false);
-  const [listening, setListening] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
-  const [showSheet, setShowSheet] = useState(false);
-  const likeAnim = useRef(new Animated.Value(1)).current;
-  const listenAnim = useRef(new Animated.Value(1)).current;
-  const shareAnim = useRef(new Animated.Value(1)).current;
-  const saveAnim = useRef(new Animated.Value(1)).current;
-
-  // Animation for button press
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-  const animatePress = (anim: Animated.Value) => {
-    Animated.sequence([
-      Animated.spring(anim, { toValue: 0.85, useNativeDriver: true }),
-      Animated.spring(anim, {
-        toValue: 1,
-        friction: 3,
-        tension: 40,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
-  const handleLike = () => {
-    animatePress(likeAnim);
-    setLiked((l) => !l);
-  };
-  const handleSave = () => {
-    animatePress(saveAnim);
-    setSaved((s) => !s);
-  };
-  const handleListen = async () => {
-    animatePress(listenAnim);
-    if (!listening) {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission to use speaker denied.');
-        return;
-      }
-      try {
-        const { sound: newSound } = await Audio.Sound.createAsync(
-          require('../../assets/sound.mp3') // Update to your path
-        );
-        setSound(newSound);
-        await newSound.playAsync();
-        setListening(true);
-      } catch (e) {
-        Alert.alert('Audio error', 'Unable to play sound.');
-      }
-    } else {
-      if (sound) {
-        await sound.stopAsync();
-        await sound.unloadAsync();
-        setSound(null);
-      }
-      setListening(false);
-    }
-  };
-  const handleShare = () => {
-    animatePress(shareAnim);
-    setShowSheet(true);
-  };
-  const closeSheet = () => setShowSheet(false);
 
   return (
     <View style={{ flex: 1 }}>
@@ -183,78 +113,43 @@ const FactCarousel = ({ fact }: { fact: Fact }) => {
           setCardIndex(idx);
         }}
       />
-      {/* Right side buttons */}
-      <View style={styles.bottomRight}>
-        <TouchableOpacity onPress={handleLike} activeOpacity={0.7}>
-          <Animated.View
-            style={{ transform: [{ scale: likeAnim }], marginBottom: 25 }}
-          >
-            <Ionicons
-              name={'heart'}
-              size={32}
-              color={liked ? '#ef4444' : Colors.text}
-            />
-          </Animated.View>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={handleListen} activeOpacity={0.7}>
-          <Animated.View
-            style={{ transform: [{ scale: listenAnim }], marginBottom: 25 }}
-          >
-            <Ionicons
-              name={'volume-high'}
-              size={32}
-              color={listening ? 'gold' : Colors.text}
-            />
-          </Animated.View>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={handleShare} activeOpacity={0.7}>
-          <Animated.View
-            style={{ transform: [{ scale: shareAnim }], marginBottom: 25 }}
-          >
-            <Ionicons name={'share-social'} size={32} color={Colors.text} />
-          </Animated.View>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={handleSave} activeOpacity={0.7}>
-          <Animated.View style={{ transform: [{ scale: saveAnim }] }}>
-            <Ionicons
-              name={'bookmark'}
-              size={32}
-              color={saved ? 'gold' : Colors.text}
-            />
-          </Animated.View>
-        </TouchableOpacity>
-      </View>
-      {/* Bottom Sheet for Share */}
-      {showSheet && (
-        <Animated.View style={styles.bottomSheet}>
-          <View style={styles.sheetHandle} />
-          <Text style={styles.sheetTitle}>Share</Text>
-          <TouchableOpacity onPress={closeSheet} style={styles.sheetClose}>
-            <Ionicons name="close" size={28} color="#fff" />
-          </TouchableOpacity>
-          {/* Add your share options here */}
-        </Animated.View>
-      )}
+      {/* Action buttons positioned on the right side */}
+      <ActionButtons 
+        fact={fact}
+        style={styles.actionButtons}
+      />
     </View>
   );
 };
 
 export default function IndexScreen() {
   const [factIndex, setFactIndex] = useState(0);
+  // TODO: Fetch user data from backend to get current streak
+  const currentStreak = 7; // Placeholder - replace with actual backend data
+  
+  // TODO: Replace MOCK_FACTS with real data from backend API
+  // Example: const { data: facts, isLoading } = useFacts()
+  
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.header}>
-        <Text style={styles.headerText}>DOPA</Text>
-        <TouchableOpacity
-          style={styles.streakButton}
-          onPress={() => router.push('/streak')}
+        {/* Bolt.new logo - Hackathon requirement */}
+        <TouchableOpacity 
+          style={styles.logoButton}
+          onPress={() => Linking.openURL('https://bolt.new/')}
           activeOpacity={0.7}
         >
-          <Ionicons name="flame" size={28} color="#fff" />
+          <Image 
+            source={require('../../assets/images/white_circle_360x360.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
         </TouchableOpacity>
+        <Text style={styles.headerText}>DOPA</Text>
+        <StreakButton streakCount={currentStreak} />
       </View>
       <FlatList
-        data={MOCK_FACTS}
+        data={MOCK_FACTS} // TODO: Replace with facts from backend
         pagingEnabled
         showsVerticalScrollIndicator={false}
         keyExtractor={(item) => item.id}
@@ -263,6 +158,8 @@ export default function IndexScreen() {
         onMomentumScrollEnd={(e) => {
           const idx = Math.round(e.nativeEvent.contentOffset.y / SCREEN_HEIGHT);
           setFactIndex(idx);
+          // TODO: Track fact viewing analytics to backend
+          // Example: await api.trackFactView(MOCK_FACTS[idx].id)
         }}
         getItemLayout={(_, index) => ({
           length: SCREEN_HEIGHT,
@@ -299,81 +196,20 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginTop: 10,
   },
-  streakButton: {
+  logoButton: {
     position: 'absolute',
-    right: 24,
+    left: 20,
     top: Platform.OS === 'android' ? (StatusBar.currentHeight || 20) + 8 : 58,
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.06)',
     zIndex: 100,
   },
-  dim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#000',
-    opacity: 0,
-    zIndex: 1,
+  logo: {
+    width: 60,
+    height: 60,
   },
-  cardContainer: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
-    backgroundColor: Colors.cardBackground,
-  },
-  mediaContainer: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 0,
-  },
-  media: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
-  },
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    padding: 24,
-    zIndex: 2,
-  },
-  bottomRight: {
+  actionButtons: {
     position: 'absolute',
     right: 15,
     bottom: 100,
-    alignItems: 'center',
     zIndex: 10,
-  },
-  bottomSheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#18181b',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    minHeight: 220,
-    zIndex: 100,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 10,
-  },
-  sheetHandle: {
-    width: 48,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#333',
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  sheetTitle: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  sheetClose: {
-    position: 'absolute',
-    top: 18,
-    right: 18,
   },
 });

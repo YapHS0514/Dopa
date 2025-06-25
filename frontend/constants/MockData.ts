@@ -1,3 +1,15 @@
+export interface Fact {
+  id: string;
+  hook: string;
+  summary: string;
+  fullContent: string;
+  image: string;
+  topic: string;
+  source: string;
+  sourceUrl: string;
+  readTime: number;
+}
+
 export const TOPICS = [
   {
     id: 'science',
@@ -37,7 +49,7 @@ export const TOPICS = [
   }
 ];
 
-export const MOCK_FACTS = [
+export const MOCK_FACTS: Fact[] = [
   {
     id: '1',
     hook: 'Honey never spoils',
@@ -97,7 +109,7 @@ export const MOCK_FACTS = [
     id: '6',
     hook: 'Honey is a natural energy booster',
     summary: 'Honey offers a quick energy boost with sustained carbohydrates, ideal for athletes.',
-    fullContent: `Honey’s natural sugars—primarily glucose and fructose—provide fast-acting energy, while amino acids, peptides, and lipids contribute to a slower release. It’s often used by athletes for sustained energy and better performance.`,
+    fullContent: `Honey's natural sugars—primarily glucose and fructose—provide fast-acting energy, while amino acids, peptides, and lipids contribute to a slower release. It's often used by athletes for sustained energy and better performance.`,
     image: 'https://example.com/honey_energy.jpg',
     topic: 'science',
     source: 'Sioux Honey Association',
@@ -130,7 +142,7 @@ export const MOCK_FACTS = [
     id: '9',
     hook: 'Octopus arms can taste and feel',
     summary: 'Each sucker on an octopus arm has ~10,000 neurons for touch and chemical sensing.',
-    fullContent: `Each sucker on an octopus’s arm contains around 10,000 neurons, enabling it to taste and feel objects. These suckers relay sensory information independently, allowing precise, tactile exploration.`,
+    fullContent: `Each sucker on an octopus's arm contains around 10,000 neurons, enabling it to taste and feel objects. These suckers relay sensory information independently, allowing precise, tactile exploration.`,
     image: 'https://example.com/octopus_sucker.jpg',
     topic: 'nature',
     source: 'Scientific American',
