@@ -34,6 +34,9 @@ const SETTINGS_OPTIONS = [
 export default function ProfileScreen() {
   const router = useRouter();
   const { signOut } = useAuth();
+  
+  // TODO: Fetch real coin balance from backend per user account
+  const coinBalance = 1240; // Mock balance
 
   const handleSignOut = async () => {
     try {
@@ -122,6 +125,15 @@ export default function ProfileScreen() {
           </Text>
         </View>
 
+        {/* Coin Info Row */}
+        <TouchableOpacity 
+          style={styles.coinRow}
+          onPress={() => router.push('/CoinsMarketplaceScreen')}
+        >
+          <Text style={styles.coinText}>🪙 {coinBalance.toLocaleString()} Coins</Text>
+          <Text style={styles.viewLink}>View Marketplace →</Text>
+        </TouchableOpacity>
+
         <View style={styles.settingsSection}>
           <Text style={[styles.sectionTitle, { color: Colors.text }]}>
             Settings
@@ -190,6 +202,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'SF-Pro-Display',
     opacity: 0.8,
+  },
+  coinRow: {
+    marginTop: 24,
+    marginHorizontal: 20,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  coinText: {
+    fontSize: 16,
+    color: '#F5F5F5',
+    fontFamily: 'SF-Pro-Display',
+    fontWeight: '600',
+  },
+  viewLink: {
+    fontSize: 14,
+    color: '#FACC15',
+    fontFamily: 'SF-Pro-Display',
+    fontWeight: '500',
   },
   settingsSection: {
     paddingHorizontal: 20,

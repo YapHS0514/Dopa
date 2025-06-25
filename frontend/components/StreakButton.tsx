@@ -39,7 +39,7 @@ const styles = StyleSheet.create({
   container: {
     position: 'absolute',
     right: 20,
-    top: 32, // Shifted down to align with DOPA logo
+    top: 42, // Shifted down to align with DOPA logo
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 20,
     paddingHorizontal: 12,
