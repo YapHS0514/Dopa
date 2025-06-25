@@ -8,6 +8,7 @@ export interface Fact {
   source: string;
   sourceUrl: string;
   readTime: number;
+  tags?: string[]; // Added tags for topic classification
 }
 
 export const TOPICS = [
@@ -49,6 +50,10 @@ export const TOPICS = [
   }
 ];
 
+// TODO: Replace mockData with real fact cards from backend (e.g. Supabase)
+// TODO: Fetch cards personalized to user's preferred topics and topic scores
+// TODO: Integrate pagination or infinite scroll when backend supports it
+
 export const MOCK_FACTS: Fact[] = [
   {
     id: '1',
@@ -59,7 +64,8 @@ export const MOCK_FACTS: Fact[] = [
     topic: 'science',
     source: 'National Geographic',
     sourceUrl: 'https://www.nationalgeographic.com/science/article/honey-food-preservation',
-    readTime: 2
+    readTime: 2,
+    tags: ['Science', 'Nature']
   },
   {
     id: '2',
@@ -70,7 +76,8 @@ export const MOCK_FACTS: Fact[] = [
     topic: 'nature',
     source: 'Scientific American',
     sourceUrl: 'https://www.scientificamerican.com/article/octopus-intelligence',
-    readTime: 2
+    readTime: 2,
+    tags: ['Nature', 'Science']
   },
   {
     id: '3',
@@ -81,7 +88,8 @@ export const MOCK_FACTS: Fact[] = [
     topic: 'nature',
     source: 'AP News',
     sourceUrl: 'https://apnews.com/article/...giant-pacific-octopus-blue-blood', // AP summarization
-    readTime: 2
+    readTime: 2,
+    tags: ['Nature', 'Science']
   },
   {
     id: '4',
@@ -92,7 +100,8 @@ export const MOCK_FACTS: Fact[] = [
     topic: 'nature',
     source: 'Scientific American',
     sourceUrl: 'https://www.scientificamerican.com/article/how-octopus-arms-bypass-the-brain/' ,
-    readTime: 2
+    readTime: 2,
+    tags: ['Nature', 'Psychology']
   },
   {
     id: '5',
@@ -103,7 +112,8 @@ export const MOCK_FACTS: Fact[] = [
     topic: 'science',
     source: 'Mental Floss',
     sourceUrl: 'https://www.mentalfloss.com/article/68528/15-honey-facts-worth-buzzing-about',
-    readTime: 2
+    readTime: 2,
+    tags: ['Science', 'History']
   },
   {
     id: '6',
@@ -114,7 +124,8 @@ export const MOCK_FACTS: Fact[] = [
     topic: 'science',
     source: 'Sioux Honey Association',
     sourceUrl: 'https://siouxhoney.com/12-honey-myths-vs-facts/',
-    readTime: 1
+    readTime: 1,
+    tags: ['Science']
   },
   {
     id: '7',
@@ -125,7 +136,8 @@ export const MOCK_FACTS: Fact[] = [
     topic: 'science',
     source: 'Mississippi State University Extension',
     sourceUrl: 'https://extension.msstate.edu/blog/does-honey-go-bad',
-    readTime: 1
+    readTime: 1,
+    tags: ['Science', 'Nature']
   },
   {
     id: '8',
@@ -136,7 +148,8 @@ export const MOCK_FACTS: Fact[] = [
     topic: 'nature',
     source: 'NHM (Natural History Museum, UK)',
     sourceUrl: 'https://www.nhm.ac.uk/discover/octopuses-keep-surprising-us-here-are-eight-examples-how.html',
-    readTime: 2
+    readTime: 2,
+    tags: ['Nature', 'Psychology']
   },
   {
     id: '9',
@@ -147,7 +160,8 @@ export const MOCK_FACTS: Fact[] = [
     topic: 'nature',
     source: 'Scientific American',
     sourceUrl: 'https://www.scientificamerican.com/article/the-mind-of-an-octopus/',
-    readTime: 2
+    readTime: 2,
+    tags: ['Nature', 'Science']
   },
   {
     id: '10',
@@ -158,7 +172,8 @@ export const MOCK_FACTS: Fact[] = [
     topic: 'science',
     source: 'Kinghaven Farms',
     sourceUrl: 'https://kinghavenfarms.com/blogs/from-the-hive/12-sweet-facts-about-honey',
-    readTime: 1
+    readTime: 1,
+    tags: ['Science', 'Nature']
   },
   {
     id: '11',
@@ -169,7 +184,8 @@ export const MOCK_FACTS: Fact[] = [
     topic: 'science',
     source: 'Wikipedia (Honey)',
     sourceUrl: 'https://en.wikipedia.org/wiki/Honey',
-    readTime: 2
+    readTime: 2,
+    tags: ['Science', 'Nature']
   },
   {
     id: '12',
@@ -180,7 +196,32 @@ export const MOCK_FACTS: Fact[] = [
     topic: 'nature',
     source: 'OctoNation',
     sourceUrl: 'https://octonation.com/octopus-brain/',
-    readTime: 2
+    readTime: 2,
+    tags: ['Nature', 'Psychology']
+  },
+  {
+    id: '13',
+    hook: 'One day on Venus is longer than one year',
+    summary: 'Venus rotates so slowly that a single day (243 Earth days) is longer than its year (225 Earth days).',
+    fullContent: `Venus has an extremely slow rotation period, taking about 243 Earth days to complete one full rotation on its axis. However, it only takes about 225 Earth days for Venus to orbit around the Sun. This means that a Venusian day is actually longer than a Venusian year! This unusual characteristic is due to Venus's retrograde rotation, spinning in the opposite direction to most other planets.`,
+    image: 'https://example.com/venus.jpg',
+    topic: 'space',
+    source: 'NASA',
+    sourceUrl: 'https://nasa.gov/venus-facts',
+    readTime: 2,
+    tags: ['Space', 'Science']
+  },
+  {
+    id: '14',
+    hook: 'AI can now detect diseases from voice patterns',
+    summary: 'Machine learning algorithms can identify early signs of Parkinson\'s, depression, and other conditions just by analyzing speech.',
+    fullContent: `Recent advances in artificial intelligence have enabled computers to detect subtle changes in voice patterns that indicate various medical conditions. Researchers have developed algorithms that can identify early-stage Parkinson's disease, depression, cognitive decline, and even COVID-19 by analyzing vocal biomarkers like pitch, rhythm, and speech patterns. This technology could revolutionize early diagnosis and remote health monitoring.`,
+    image: 'https://example.com/ai_voice.jpg',
+    topic: 'ai',
+    source: 'MIT Technology Review',
+    sourceUrl: 'https://technologyreview.com/ai-voice-diagnosis',
+    readTime: 3,
+    tags: ['AI & Tech', 'Science']
   }
 ];
 

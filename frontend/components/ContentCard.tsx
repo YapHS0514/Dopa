@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { Colors } from '../constants/Colors';
 import * as Animatable from 'react-native-animatable';
+import { TopicTags } from './TopicTags';
 
 type ContentCardProps = {
   title: string;
@@ -16,6 +17,7 @@ type ContentCardProps = {
   isHookCard?: boolean; // <-- Add this
   sourceUrl?: string;
   onSourcePress?: () => void;
+  tags?: string[]; // Added for topic tags display
 };
 
 export function ContentCard({
@@ -25,6 +27,7 @@ export function ContentCard({
   isHookCard,
   sourceUrl,
   onSourcePress,
+  tags,
 }: ContentCardProps) {
   return (
     <Animatable.View
@@ -37,6 +40,11 @@ export function ContentCard({
           isHookCard && styles.hookCardContentContainer,
         ]}
       >
+        {/* Show topic tags on front side only (not source cards) */}
+        {!isSourceCard && tags && tags.length > 0 && (
+          <TopicTags tags={tags} style={styles.topicTags} />
+        )}
+        
         <Text
           style={
             isSourceCard
@@ -134,5 +142,11 @@ const styles = StyleSheet.create({
   },
   bodyWrapper: {
     marginTop: 80, // Adjust this value to control how low the body starts
+  },
+  topicTags: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    zIndex: 10,
   },
 });

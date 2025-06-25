@@ -49,7 +49,8 @@ export default function ActionButtons({ fact, style }: ActionButtonsProps) {
   const handleSave = () => {
     animatePress(saveAnim);
     setSaved((s) => !s);
-    // TODO: Send save status to backend API
+    // TODO: Write save/unsave mutations to backend (toggle save state per user)
+    // TODO: Sync save/unsave actions to backend with optimistic update
     // Example: await api.saveFact(fact.id, !saved)
   };
 

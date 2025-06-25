@@ -99,6 +99,7 @@ const FactCarousel = ({ fact }: { fact: Fact }) => {
                 isSourceCard={item.isSourceCard}
                 isHookCard={item.isHookCard}
                 sourceUrl={item.sourceUrl}
+                tags={item.isHookCard ? fact.tags : undefined} // Show tags only on hook card
                 onSourcePress={
                   item.isSourceCard && item.sourceUrl
                     ? () => Linking.openURL(item.sourceUrl)
@@ -128,6 +129,8 @@ export default function IndexScreen() {
   const currentStreak = 7; // Placeholder - replace with actual backend data
   
   // TODO: Replace MOCK_FACTS with real data from backend API
+  // TODO: Fetch cards personalized to user's preferred topics and topic scores
+  // TODO: Integrate pagination or infinite scroll when backend supports it
   // Example: const { data: facts, isLoading } = useFacts()
   
   return (

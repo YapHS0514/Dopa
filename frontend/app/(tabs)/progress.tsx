@@ -95,19 +95,16 @@ export default function ProgressScreen() {
         </View>
 
         <View style={styles.content}>
-          <LinearGradient
-            colors={['#10B98120', 'transparent']}
-            style={styles.weeklyBox}
-          >
-            <BlurView intensity={100} tint={theme} style={styles.weeklyContent}>
-              <Text style={[styles.weeklyTitle, { color: Colors.text }]}>
+          <View style={styles.weeklyBox}>
+            <View style={styles.weeklyContent}>
+              <Text style={styles.weeklyTitle}>
                 This Week
               </Text>
-              <Text style={[styles.weeklyStats, { color: Colors.text }]}>
+              <Text style={styles.weeklyStats}>
                 You've learned {MOCK_DATA.weeklyFacts} new facts! 🎉
               </Text>
-            </BlurView>
-          </LinearGradient>
+            </View>
+          </View>
 
           <View style={styles.levelProgress}>
             <View style={styles.levelHeader}>
@@ -317,32 +314,46 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: 20,
+    alignItems: 'center', // Center the title
   },
   title: {
     fontSize: 32,
     fontFamily: 'SF-Pro-Display',
+    fontWeight: 'bold',
   },
   content: {
     paddingHorizontal: 20,
   },
   weeklyBox: {
-    borderRadius: 16,
+    borderRadius: 20,
     marginBottom: 24,
-    padding: 1,
+    backgroundColor: '#1A1A1A',
+    borderWidth: 2,
+    borderColor: '#10B981',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   weeklyContent: {
-    padding: 20,
-    borderRadius: 16,
+    padding: 24,
+    borderRadius: 18,
+    backgroundColor: 'rgba(16, 185, 129, 0.05)',
   },
   weeklyTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontFamily: 'SF-Pro-Display',
+    fontWeight: 'bold',
     marginBottom: 8,
+    color: '#F5F5F5', // Force white for better visibility
   },
   weeklyStats: {
-    fontSize: 16,
+    fontSize: 17,
     fontFamily: 'SF-Pro-Display',
-    lineHeight: 24,
+    lineHeight: 26,
+    color: '#E5E5E5', // Slightly off-white for better contrast
+    fontWeight: '500',
   },
   levelProgress: {
     marginBottom: 24,
