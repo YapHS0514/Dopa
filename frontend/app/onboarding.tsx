@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,14 +6,23 @@ import {
   TouchableOpacity,
   ScrollView,
   Dimensions,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { router } from 'expo-router';
 import * as Animatable from 'react-native-animatable';
 import { Feather } from '@expo/vector-icons';
 import { Colors } from '../constants/Colors';
-import { TOPICS } from '../constants/MockData';
 import { useStore } from '../lib/store';
 import { useAuth } from '../hooks/useAuth';
+import { apiClient } from '../lib/api';
+
+interface Topic {
+  id: string;
+  name: string;
+  color?: string;
+  icon?: string;
+}
 
 const AGE_GROUPS = [
   { id: '8-12', label: '8-12 years' },
@@ -28,8 +37,29 @@ export default function OnboardingScreen() {
   const [step, setStep] = useState(1);
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<string | null>(null);
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [loadingTopics, setLoadingTopics] = useState(false);
+  const [savingPreferences, setSavingPreferences] = useState(false);
   const updateUserProfile = useStore((state) => state.updateUserProfile);
-  const { completeOnboarding } = useAuth();
+
+  // Fetch topics when component mounts
+  useEffect(() => {
+    const fetchTopics = async () => {
+      try {
+        setLoadingTopics(true);
+        const response = (await apiClient.getTopics()) as { data: Topic[] };
+        console.log('Fetched topics:', response);
+        setTopics(response.data || []);
+      } catch (error) {
+        console.error('Error fetching topics:', error);
+        Alert.alert('Error', 'Failed to load topics. Please try again.');
+      } finally {
+        setLoadingTopics(false);
+      }
+    };
+
+    fetchTopics();
+  }, []);
 
   const handleTopicToggle = useCallback((topicId: string) => {
     setSelectedTopics((prev) =>
@@ -44,30 +74,34 @@ export default function OnboardingScreen() {
       setStep(2);
     } else if (step === 2 && selectedTopics.length >= 5) {
       try {
+        setSavingPreferences(true);
+
         // Update local store
         updateUserProfile({
           age_group: selectedAgeGroup as '8-12' | '13-17' | '18-25',
           selected_topics: selectedTopics,
         });
 
-        // Mark onboarding as completed in the backend
-        await completeOnboarding();
+        // Save topic preferences to backend with 50 points each
+        const preferences = selectedTopics.map((topicId) => ({
+          topic_id: topicId,
+          points: 50,
+        }));
+
+        console.log('Saving topic preferences:', preferences);
+        await apiClient.updateUserPreferences(preferences);
 
         // Navigate to main app
         router.replace('/(tabs)');
       } catch (error) {
         console.error('Error completing onboarding:', error);
-        // Still navigate to tabs even if there's an error
-        router.replace('/(tabs)');
+        Alert.alert('Error', 'Failed to save preferences. Please try again.');
+        // Don't navigate on error - let user try again
+      } finally {
+        setSavingPreferences(false);
       }
     }
-  }, [
-    step,
-    selectedAgeGroup,
-    selectedTopics,
-    updateUserProfile,
-    completeOnboarding,
-  ]);
+  }, [step, selectedAgeGroup, selectedTopics, updateUserProfile]);
 
   return (
     <View style={[styles.container, { backgroundColor: Colors.background }]}>
@@ -112,41 +146,42 @@ export default function OnboardingScreen() {
             Select at least 5 topics you'd like to learn about
           </Text>
 
-          <ScrollView
-            style={styles.topicsContainer}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.topicsGrid}>
-              {TOPICS.map((topic) => (
-                <TouchableOpacity
-                  key={topic.id}
-                  style={[
-                    styles.topicItem,
-                    {
-                      backgroundColor: selectedTopics.includes(topic.id)
-                        ? Colors.tint
-                        : Colors.background,
-                      borderColor: Colors.border,
-                    },
-                  ]}
-                  onPress={() => handleTopicToggle(topic.id)}
-                >
-                  <Text style={styles.topicIcon}>{topic.icon}</Text>
-                  <Text style={[styles.topicName, { color: Colors.text }]}>
-                    {topic.name}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.topicDescription,
-                      { color: Colors.textSecondary },
-                    ]}
-                  >
-                    {topic.description}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+          {loadingTopics ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={Colors.tint} />
+              <Text style={[styles.loadingText, { color: Colors.text }]}>
+                Loading topics...
+              </Text>
             </View>
-          </ScrollView>
+          ) : (
+            <ScrollView
+              style={styles.topicsContainer}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.topicsGrid}>
+                {topics.map((topic: Topic) => (
+                  <TouchableOpacity
+                    key={topic.id}
+                    style={[
+                      styles.topicItem,
+                      {
+                        backgroundColor: selectedTopics.includes(topic.id)
+                          ? Colors.tint
+                          : Colors.background,
+                        borderColor: Colors.border,
+                      },
+                    ]}
+                    onPress={() => handleTopicToggle(topic.id)}
+                  >
+                    <Text style={styles.topicIcon}>{topic.icon || '🏷️'}</Text>
+                    <Text style={[styles.topicName, { color: Colors.text }]}>
+                      {topic.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          )}
         </Animatable.View>
       )}
 
@@ -163,14 +198,24 @@ export default function OnboardingScreen() {
         ]}
         disabled={
           (step === 1 && !selectedAgeGroup) ||
-          (step === 2 && selectedTopics.length < 5)
+          (step === 2 && selectedTopics.length < 5) ||
+          savingPreferences
         }
         onPress={handleNext}
       >
-        <Text style={styles.nextButtonText}>
-          {step === 1 ? 'Next' : 'Get Started'}
-        </Text>
-        <Feather name="arrow-right" size={20} color={Colors.text} />
+        {savingPreferences && step === 2 ? (
+          <>
+            <ActivityIndicator size="small" color={Colors.text} />
+            <Text style={styles.nextButtonText}>Saving...</Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.nextButtonText}>
+              {step === 1 ? 'Next' : 'Get Started'}
+            </Text>
+            <Feather name="arrow-right" size={20} color={Colors.text} />
+          </>
+        )}
       </TouchableOpacity>
     </View>
   );
@@ -251,5 +296,16 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontSize: 18,
     fontWeight: '600',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 50,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    opacity: 0.7,
   },
 });
