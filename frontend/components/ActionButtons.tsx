@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   View,
   TouchableOpacity,
@@ -9,6 +9,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/Colors';
 import { Audio } from 'expo-av';
+import { apiClient } from '../lib/api';
 
 interface ActionButtonsProps {
   fact?: any; // TODO: Replace with proper Fact type from backend
@@ -20,11 +21,30 @@ export default function ActionButtons({ fact, style }: ActionButtonsProps) {
   const [listening, setListening] = useState(false);
   const [saved, setSaved] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
-  
+
   const likeAnim = useRef(new Animated.Value(1)).current;
   const listenAnim = useRef(new Animated.Value(1)).current;
   const shareAnim = useRef(new Animated.Value(1)).current;
   const saveAnim = useRef(new Animated.Value(1)).current;
+
+  // Check if content is already saved when component mounts or fact changes
+  useEffect(() => {
+    const checkIfSaved = async () => {
+      if (!fact?.id) return;
+
+      try {
+        const response = (await apiClient.getSavedContent()) as { data: any[] };
+        const isContentSaved = response.data.some(
+          (saved: any) => saved.contents?.id === fact.id
+        );
+        setSaved(isContentSaved);
+      } catch (error) {
+        console.log('Error checking saved status:', error);
+      }
+    };
+
+    checkIfSaved();
+  }, [fact?.id]);
 
   // Animation for button press
   const animatePress = (anim: Animated.Value) => {
@@ -46,12 +66,51 @@ export default function ActionButtons({ fact, style }: ActionButtonsProps) {
     // Example: await api.likeFact(fact.id, !liked)
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     animatePress(saveAnim);
-    setSaved((s) => !s);
-    // TODO: Write save/unsave mutations to backend (toggle save state per user)
-    // TODO: Sync save/unsave actions to backend with optimistic update
-    // Example: await api.saveFact(fact.id, !saved)
+
+    if (!fact?.id) {
+      Alert.alert('Error', 'Content ID not available');
+      return;
+    }
+
+    try {
+      if (!saved) {
+        // Save the content
+        console.log('Saving content:', fact.id);
+        const response = (await apiClient.saveContent(fact.id)) as {
+          message: string;
+          saved_count: number;
+          max_saves: number;
+        };
+
+        setSaved(true);
+        Alert.alert(
+          'Saved!',
+          `${response.message}\nSaved: ${response.saved_count}/${response.max_saves}`
+        );
+      } else {
+        // For unsaving, we would need the saved_content_id, which requires a different approach
+        Alert.alert(
+          'Info',
+          'To remove saved content, please go to your saved content page.'
+        );
+      }
+    } catch (error: any) {
+      console.error('Error saving content:', error);
+
+      if (error.message.includes('maximum number of saves')) {
+        Alert.alert('Save Limit Reached', error.message);
+      } else if (error.message.includes('already saved')) {
+        Alert.alert(
+          'Already Saved',
+          'This content is already in your saved list.'
+        );
+        setSaved(true); // Update UI to reflect that it's saved
+      } else {
+        Alert.alert('Error', error.message || 'Failed to save content');
+      }
+    }
   };
 
   const handleListen = async () => {
@@ -106,7 +165,7 @@ export default function ActionButtons({ fact, style }: ActionButtonsProps) {
           />
         </Animated.View>
       </TouchableOpacity>
-      
+
       <TouchableOpacity onPress={handleListen} activeOpacity={0.7}>
         <Animated.View
           style={[styles.button, { transform: [{ scale: listenAnim }] }]}
@@ -118,7 +177,7 @@ export default function ActionButtons({ fact, style }: ActionButtonsProps) {
           />
         </Animated.View>
       </TouchableOpacity>
-      
+
       <TouchableOpacity onPress={handleShare} activeOpacity={0.7}>
         <Animated.View
           style={[styles.button, { transform: [{ scale: shareAnim }] }]}
@@ -126,7 +185,7 @@ export default function ActionButtons({ fact, style }: ActionButtonsProps) {
           <Ionicons name={'share-social'} size={32} color={Colors.text} />
         </Animated.View>
       </TouchableOpacity>
-      
+
       <TouchableOpacity onPress={handleSave} activeOpacity={0.7}>
         <Animated.View
           style={[styles.buttonLast, { transform: [{ scale: saveAnim }] }]}
@@ -152,4 +211,4 @@ const styles = StyleSheet.create({
   buttonLast: {
     // No margin for the last button
   },
-}); 
+});

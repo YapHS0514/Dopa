@@ -23,20 +23,12 @@ async def get_contents(
         
         # First, get the user's profile ID from the profiles table
         logger.info("Getting user's profile ID from profiles table")
-        profile_response = supabase.table("profiles").select("id").eq("user_id", user.id).execute()
-        
-        if not profile_response.data:
-            logger.warning(f"No profile found for auth user {user.id}")
-            raise HTTPException(status_code=404, detail="User profile not found")
-        
-        profile_id = profile_response.data[0]["id"]
-        logger.info(f"Found profile ID {profile_id} for auth user {user.id}")
-        
+
         # Step 1: Get user's preferred topics (points > 50) using profile ID
         logger.info("Step 1: Getting user's preferred topics with points > 50")
         prefs_response = supabase.table("user_topic_preferences").select(
             "topic_id, points"
-        ).eq("user_id", profile_id).gt("points", 50).execute()
+        ).eq("user_id", user.id).gte("points", 50).execute()
         
         logger.info(f"User preferences response: {prefs_response.data}")
         
@@ -74,7 +66,7 @@ async def get_contents(
                 # Step 3: Get the actual content records for preferred content IDs
                 logger.info("Step 3: Getting content records for preferred content IDs")
                 response = supabase.table("contents").select(
-                    "id, title, summary, content_type, media_url, source_url, tags, created_at"
+                    "id, title, summary, content_type, media_url, source_url, created_at"
                 ).in_("id", preferred_content_ids).order("created_at", desc=True).range(offset, offset + limit - 1).execute()
         
         logger.info(f"Final content response: {response.data}")
