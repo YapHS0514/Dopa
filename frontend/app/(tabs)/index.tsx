@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,16 +11,30 @@ import {
   Platform,
   SafeAreaView,
   Image,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
-import { MOCK_FACTS } from '../../constants/MockData';
 import { ContentCard } from '../../components/ContentCard';
 import ActionButtons from '../../components/ActionButtons';
 import StreakButton from '../../components/StreakButton';
+import { apiClient } from '../../lib/api';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-type Fact = (typeof MOCK_FACTS)[number];
+// Type definition for facts from API
+interface Fact {
+  id: string;
+  hook: string;
+  summary: string;
+  fullContent: string;
+  image: string;
+  topic: string;
+  source: string;
+  sourceUrl: string;
+  readTime: number;
+  tags?: string[];
+}
 
 const getFactCards = (fact: Fact) => {
   const cards = [
@@ -115,34 +129,54 @@ const FactCarousel = ({ fact }: { fact: Fact }) => {
         }}
       />
       {/* Action buttons positioned on the right side */}
-      <ActionButtons 
-        fact={fact}
-        style={styles.actionButtons}
-      />
+      <ActionButtons fact={fact} style={styles.actionButtons} />
     </View>
   );
 };
 
 export default function IndexScreen() {
   const [factIndex, setFactIndex] = useState(0);
+  const [facts, setFacts] = useState<Fact[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   // TODO: Fetch user data from backend to get current streak
   const currentStreak = 7; // Placeholder - replace with actual backend data
-  
-  // TODO: Replace MOCK_FACTS with real data from backend API
-  // TODO: Fetch cards personalized to user's preferred topics and topic scores
-  // TODO: Integrate pagination or infinite scroll when backend supports it
-  // Example: const { data: facts, isLoading } = useFacts()
-  
+
+  // Fetch personalized content from backend
+  useEffect(() => {
+    const fetchContent = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        console.log('Fetching personalized content...');
+        const response = (await apiClient.getContents(20, 0)) as {
+          data: Fact[];
+        };
+        console.log('Content response:', response);
+        setFacts(response.data || []);
+      } catch (error: any) {
+        console.error('Error fetching content:', error);
+        setError('Failed to load content. Please try again.');
+        Alert.alert('Error', 'Failed to load content. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchContent();
+  }, []);
+
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.header}>
         {/* Bolt.new logo - Hackathon requirement */}
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.logoButton}
           onPress={() => Linking.openURL('https://bolt.new/')}
           activeOpacity={0.7}
         >
-          <Image 
+          <Image
             source={require('../../assets/images/white_circle_360x360.png')}
             style={styles.logo}
             resizeMode="contain"
@@ -151,25 +185,69 @@ export default function IndexScreen() {
         <Text style={styles.headerText}>DOPA</Text>
         <StreakButton streakCount={currentStreak} />
       </View>
-      <FlatList
-        data={MOCK_FACTS} // TODO: Replace with facts from backend
-        pagingEnabled
-        showsVerticalScrollIndicator={false}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <FactCarousel fact={item} />}
-        style={{ flex: 1 }}
-        onMomentumScrollEnd={(e) => {
-          const idx = Math.round(e.nativeEvent.contentOffset.y / SCREEN_HEIGHT);
-          setFactIndex(idx);
-          // TODO: Track fact viewing analytics to backend
-          // Example: await api.trackFactView(MOCK_FACTS[idx].id)
-        }}
-        getItemLayout={(_, index) => ({
-          length: SCREEN_HEIGHT,
-          offset: SCREEN_HEIGHT * index,
-          index,
-        })}
-      />
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.tint} />
+          <Text style={styles.loadingText}>
+            Loading personalized content...
+          </Text>
+        </View>
+      ) : error ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => {
+              const fetchContent = async () => {
+                try {
+                  setLoading(true);
+                  setError(null);
+                  const response = (await apiClient.getContents(20, 0)) as {
+                    data: Fact[];
+                  };
+                  setFacts(response.data || []);
+                } catch (error: any) {
+                  setError('Failed to load content. Please try again.');
+                } finally {
+                  setLoading(false);
+                }
+              };
+              fetchContent();
+            }}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : facts.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>
+            No content available. Complete onboarding to get personalized
+            content!
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={facts}
+          pagingEnabled
+          showsVerticalScrollIndicator={false}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => <FactCarousel fact={item} />}
+          style={{ flex: 1 }}
+          onMomentumScrollEnd={(e) => {
+            const idx = Math.round(
+              e.nativeEvent.contentOffset.y / SCREEN_HEIGHT
+            );
+            setFactIndex(idx);
+            // TODO: Track fact viewing analytics to backend
+            // Example: await api.trackFactView(facts[idx].id)
+          }}
+          getItemLayout={(_, index) => ({
+            length: SCREEN_HEIGHT,
+            offset: SCREEN_HEIGHT * index,
+            index,
+          })}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -214,5 +292,53 @@ const styles = StyleSheet.create({
     right: 15,
     bottom: 100,
     zIndex: 10,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: Colors.text,
+    textAlign: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 16,
+    color: Colors.text,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: Colors.tint,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+    padding: 20,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: Colors.text,
+    textAlign: 'center',
   },
 });
