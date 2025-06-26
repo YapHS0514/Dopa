@@ -48,7 +48,19 @@ async def get_topics(user: User = Depends(get_current_user)):
 async def get_user_preferences(user: User = Depends(get_current_user)):
     """Get user topic preferences"""
     try:
+        logger.info(f"Getting preferences for auth user {user.id}")
         supabase = get_supabase_client()
+        
+        # First, get the user's profile ID from the profiles table
+        profile_response = supabase.table("profiles").select("id").eq("user_id", user.id).execute()
+        
+        if not profile_response.data:
+            logger.warning(f"No profile found for auth user {user.id}")
+            raise HTTPException(status_code=404, detail="User profile not found")
+        
+        profile_id = profile_response.data[0]["id"]
+        logger.info(f"Found profile ID {profile_id} for auth user {user.id}")
+        
         response = supabase.table("user_topic_preferences").select("""
             *,
             topics (
@@ -57,10 +69,11 @@ async def get_user_preferences(user: User = Depends(get_current_user)):
                 color,
                 icon
             )
-        """).eq("user_id", user.id).order("points", desc=True).execute()
+        """).eq("user_id", profile_id).order("points", desc=True).execute()
         
         return {"data": response.data}
     except Exception as e:
+        logger.error(f"Error getting user preferences: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/api/user/preferences")
@@ -70,13 +83,23 @@ async def update_user_preferences(
 ):
     """Update user's topic preferences"""
     try:
-        logger.info(f"Received preferences update request for user {user.id}")
+        logger.info(f"Received preferences update request for auth user {user.id}")
         logger.info(f"Received preferences: {preferences}")
 
         supabase_admin = get_supabase_admin_client()
 
+        # First, get the user's profile ID from the profiles table
+        profile_response = supabase_admin.table("profiles").select("id").eq("user_id", user.id).execute()
+        
+        if not profile_response.data:
+            logger.warning(f"No profile found for auth user {user.id}")
+            raise HTTPException(status_code=404, detail="User profile not found")
+        
+        profile_id = profile_response.data[0]["id"]
+        logger.info(f"Found profile ID {profile_id} for auth user {user.id}")
+
         # Delete existing preferences using admin client
-        delete_response = supabase_admin.table("user_topic_preferences").delete().eq("user_id", user.id).execute()
+        delete_response = supabase_admin.table("user_topic_preferences").delete().eq("user_id", profile_id).execute()
         logger.info(f"Deleted existing preferences: {delete_response}")
 
         # Insert new preferences using admin client
@@ -84,7 +107,7 @@ async def update_user_preferences(
             logger.info(f"Processing preference: {pref}")
             try:
                 response = supabase_admin.table("user_topic_preferences").insert({
-                    "user_id": user.id,
+                    "user_id": profile_id,
                     "topic_id": pref.topic_id,
                     "points": pref.points
                 }).execute()
