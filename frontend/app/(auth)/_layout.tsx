@@ -2,7 +2,7 @@ import { Stack, Redirect } from 'expo-router';
 import { useColorScheme } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { useStore } from '../../lib/store';
-import { useAuth } from '../../hooks/useAuth';
+import { AuthContext } from '../../contexts/AuthContext';
 import React, { useEffect, useState } from 'react';
 
 export default function AuthLayout() {
@@ -10,7 +10,8 @@ export default function AuthLayout() {
   const theme = useStore((state) => state.theme);
   const isDark = theme === 'dark' || colorScheme === 'dark';
 
-  const { user, checkOnboardingStatus, loading } = useAuth();
+  const { user, checkOnboardingStatus, loading } =
+    React.useContext(AuthContext);
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
 
   // Check onboarding status if user is authenticated
@@ -64,14 +65,6 @@ export default function AuthLayout() {
         options={{
           title: 'Create Account',
           headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        name="onboarding"
-        options={{
-          title: 'Customize Your Experience',
-          headerShown: false,
-          gestureEnabled: false,
         }}
       />
     </Stack>

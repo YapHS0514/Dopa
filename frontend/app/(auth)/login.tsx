@@ -105,7 +105,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await signIn(email, password);
-      router.replace('/(tabs)');
+      // Navigation is handled by the auth layout based on onboarding status
     } catch (error: any) {
       Alert.alert('Error', error.message);
     } finally {

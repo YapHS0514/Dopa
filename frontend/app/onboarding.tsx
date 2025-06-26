@@ -10,9 +10,10 @@ import {
 import { router } from 'expo-router';
 import * as Animatable from 'react-native-animatable';
 import { Feather } from '@expo/vector-icons';
-import { Colors } from '../../constants/Colors';
-import { TOPICS } from '../../constants/MockData';
-import { useStore } from '../../lib/store';
+import { Colors } from '../constants/Colors';
+import { TOPICS } from '../constants/MockData';
+import { useStore } from '../lib/store';
+import { useAuth } from '../hooks/useAuth';
 
 const AGE_GROUPS = [
   { id: '8-12', label: '8-12 years' },
@@ -28,6 +29,7 @@ export default function OnboardingScreen() {
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<string | null>(null);
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const updateUserProfile = useStore((state) => state.updateUserProfile);
+  const { completeOnboarding } = useAuth();
 
   const handleTopicToggle = useCallback((topicId: string) => {
     setSelectedTopics((prev) =>
@@ -37,17 +39,35 @@ export default function OnboardingScreen() {
     );
   }, []);
 
-  const handleNext = useCallback(() => {
+  const handleNext = useCallback(async () => {
     if (step === 1 && selectedAgeGroup) {
       setStep(2);
     } else if (step === 2 && selectedTopics.length >= 5) {
-      updateUserProfile({
-        age_group: selectedAgeGroup as '8-12' | '13-17' | '18-25',
-        selected_topics: selectedTopics,
-      });
-      router.replace('/(tabs)');
+      try {
+        // Update local store
+        updateUserProfile({
+          age_group: selectedAgeGroup as '8-12' | '13-17' | '18-25',
+          selected_topics: selectedTopics,
+        });
+
+        // Mark onboarding as completed in the backend
+        await completeOnboarding();
+
+        // Navigate to main app
+        router.replace('/(tabs)');
+      } catch (error) {
+        console.error('Error completing onboarding:', error);
+        // Still navigate to tabs even if there's an error
+        router.replace('/(tabs)');
+      }
     }
-  }, [step, selectedAgeGroup, selectedTopics, updateUserProfile]);
+  }, [
+    step,
+    selectedAgeGroup,
+    selectedTopics,
+    updateUserProfile,
+    completeOnboarding,
+  ]);
 
   return (
     <View style={[styles.container, { backgroundColor: Colors.background }]}>
