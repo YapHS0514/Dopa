@@ -7,9 +7,12 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { VolumeX, Volume2 } from 'lucide-react-native';
 import { Colors } from '../constants/Colors';
 import { Audio } from 'expo-av';
 import { apiClient } from '../lib/api';
+import { useSavedContent } from '../contexts/SavedContentContext';
+import { useReelAudioStore } from '../lib/store';
 
 interface ActionButtonsProps {
   fact?: any; // TODO: Replace with proper Fact type from backend
@@ -19,32 +22,29 @@ interface ActionButtonsProps {
 export default function ActionButtons({ fact, style }: ActionButtonsProps) {
   const [liked, setLiked] = useState(false);
   const [listening, setListening] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
+  
+  // Use the saved content context for efficient checking
+  const { isContentSaved, addSavedContent, removeSavedContent, getSavedItemId } = useSavedContent();
+  
+  // Use clean Reel audio store
+  const { isManuallyMuted, toggleMute: toggleReelMute, getCurrentlyPlaying } = useReelAudioStore();
+  
+  // Get saved status immediately from context - no API calls needed!
+  const saved = fact?.id ? isContentSaved(fact.id) : false;
+  
+  // Determine content type and audio state
+  const isReel = fact?.contentType === 'reel' || fact?.video_url;
+  const isCurrentReel = getCurrentlyPlaying() === fact?.id;
+  const reelIsManuallyMuted = fact?.id ? isManuallyMuted(fact.id) : false;
+  
+  // Debug logging
+  console.log(`🎬 ActionButtons - ID: ${fact?.id}, Type: ${fact?.contentType}, Is Reel: ${isReel}, Is Current: ${isCurrentReel}, Manually Muted: ${reelIsManuallyMuted}`);
 
   const likeAnim = useRef(new Animated.Value(1)).current;
   const listenAnim = useRef(new Animated.Value(1)).current;
   const shareAnim = useRef(new Animated.Value(1)).current;
   const saveAnim = useRef(new Animated.Value(1)).current;
-
-  // Check if content is already saved when component mounts or fact changes
-  useEffect(() => {
-    const checkIfSaved = async () => {
-      if (!fact?.id) return;
-
-      try {
-        const response = (await apiClient.getSavedContent()) as { data: any[] };
-        const isContentSaved = response.data.some(
-          (saved: any) => saved.contents?.id === fact.id
-        );
-        setSaved(isContentSaved);
-      } catch (error) {
-        console.log('Error checking saved status:', error);
-      }
-    };
-
-    checkIfSaved();
-  }, [fact?.id]);
 
   // Animation for button press
   const animatePress = (anim: Animated.Value) => {
@@ -66,6 +66,8 @@ export default function ActionButtons({ fact, style }: ActionButtonsProps) {
     // Example: await api.likeFact(fact.id, !liked)
   };
 
+  const [isSavingContent, setIsSavingContent] = useState(false);
+
   const handleSave = async () => {
     animatePress(saveAnim);
 
@@ -73,6 +75,13 @@ export default function ActionButtons({ fact, style }: ActionButtonsProps) {
       Alert.alert('Error', 'Content ID not available');
       return;
     }
+
+    if (isSavingContent) {
+      console.log('Save operation already in progress, skipping...');
+      return;
+    }
+
+    setIsSavingContent(true);
 
     try {
       if (!saved) {
@@ -82,64 +91,115 @@ export default function ActionButtons({ fact, style }: ActionButtonsProps) {
           message: string;
           saved_count: number;
           max_saves: number;
+          saved_id?: string; // The ID of the newly created saved record
         };
 
-        setSaved(true);
-        Alert.alert(
-          'Saved!',
-          `${response.message}\nSaved: ${response.saved_count}/${response.max_saves}`
-        );
+        // Extract saved_id from response or use a placeholder
+        const savedId = response.saved_id || `temp_${Date.now()}`;
+        
+        // Update context immediately for instant UI feedback
+        addSavedContent(fact.id, savedId);
+        console.log(`Saved! ${response.message} (${response.saved_count}/${response.max_saves})`);
       } else {
-        // For unsaving, we would need the saved_content_id, which requires a different approach
-        Alert.alert(
-          'Info',
-          'To remove saved content, please go to your saved content page.'
-        );
+        // Unsave the content - now we can do this efficiently!
+        console.log('Unsaving content:', fact.id);
+        
+        // Get the saved item ID from our cached context (no API call needed!)
+        const savedItemId = getSavedItemId(fact.id);
+        
+        if (savedItemId) {
+          // Remove from backend
+          await apiClient.removeSavedContent(savedItemId);
+          
+          // Update context immediately for instant UI feedback
+          removeSavedContent(fact.id);
+          console.log('Content removed from saved list');
+        } else {
+          console.warn('No saved item ID found for content:', fact.id);
+          // Still try to remove from local state in case of inconsistency
+          removeSavedContent(fact.id);
+        }
       }
     } catch (error: any) {
-      console.error('Error saving content:', error);
+      console.error('Error toggling save state:', error);
 
-      if (error.message.includes('maximum number of saves')) {
+      if (error.message?.includes('maximum number of saves')) {
         Alert.alert('Save Limit Reached', error.message);
-      } else if (error.message.includes('already saved')) {
-        Alert.alert(
-          'Already Saved',
-          'This content is already in your saved list.'
-        );
-        setSaved(true); // Update UI to reflect that it's saved
+        // Revert the optimistic update if it failed
+        if (!saved) {
+          removeSavedContent(fact.id);
+        }
+      } else if (error.message?.includes('already saved')) {
+        console.log('Content already saved, keeping UI updated');
+        // Don't revert - keep the saved state
+      } else if (error.status === 429) {
+        console.log('Rate limited - too many requests');
+        // Don't show alert for rate limiting, just log
+        // Keep the optimistic update - it will sync eventually
       } else {
-        Alert.alert('Error', error.message || 'Failed to save content');
+        console.error('Failed to save/unsave content:', error.message || error);
+        // Revert the optimistic update for other errors
+        if (saved) {
+          // Was trying to unsave, revert by adding back
+          const savedId = getSavedItemId(fact.id) || `temp_${Date.now()}`;
+          addSavedContent(fact.id, savedId);
+        } else {
+          // Was trying to save, revert by removing
+          removeSavedContent(fact.id);
+        }
+        Alert.alert('Error', error.message || 'Failed to update save status');
       }
+    } finally {
+      // Add a delay to prevent rapid successive calls
+      setTimeout(() => setIsSavingContent(false), 1500);
     }
   };
 
   const handleListen = async () => {
     animatePress(listenAnim);
-    if (!listening) {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission to use speaker denied.');
-        return;
-      }
-      try {
-        // TODO: Replace with backend-provided audio URL for text-to-speech
-        // Example: const audioUrl = await api.getTextToSpeech(fact.fullContent)
-        const { sound: newSound } = await Audio.Sound.createAsync(
-          require('../assets/sound.mp3') // Placeholder audio
-        );
-        setSound(newSound);
-        await newSound.playAsync();
-        setListening(true);
-      } catch (e) {
-        Alert.alert('Audio error', 'Unable to play sound.');
+    
+    if (isReel) {
+      // For Any Reel: Allow mute/unmute (not just current)
+      if (fact?.id) {
+        console.log(`🔊 Toggling mute for reel ${fact.id}, currently manually muted: ${reelIsManuallyMuted}, is current: ${isCurrentReel}`);
+        const newMutedState = toggleReelMute(fact.id);
+        console.log(`🔊 Reel ${fact.id} manual mute toggled: ${newMutedState ? 'muted' : 'unmuted'}`);
+        
+        // The ReelCard component will automatically update its video
+        // since it subscribes to the Zustand store
       }
     } else {
-      if (sound) {
-        await sound.stopAsync();
-        await sound.unloadAsync();
-        setSound(null);
+      // For Text/Image content: Handle voiceover
+      if (!listening) {
+        // TODO: Play voiceover using ElevenLabs (not implemented yet)
+        console.log('TODO: Play voiceover using ElevenLabs for text content:', fact?.id);
+        
+        // Placeholder implementation with local audio for now
+        const { status } = await Audio.requestPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission to use speaker denied.');
+          return;
+        }
+        try {
+          // TODO: Replace with backend-provided audio URL for text-to-speech
+          // Example: const audioUrl = await api.getTextToSpeech(fact.fullContent)
+          const { sound: newSound } = await Audio.Sound.createAsync(
+            require('../assets/sound.mp3') // Placeholder audio
+          );
+          setSound(newSound);
+          await newSound.playAsync();
+          setListening(true);
+        } catch (e) {
+          Alert.alert('Audio error', 'Unable to play sound.');
+        }
+      } else {
+        if (sound) {
+          await sound.stopAsync();
+          await sound.unloadAsync();
+          setSound(null);
+        }
+        setListening(false);
       }
-      setListening(false);
     }
   };
 
@@ -170,11 +230,29 @@ export default function ActionButtons({ fact, style }: ActionButtonsProps) {
         <Animated.View
           style={[styles.button, { transform: [{ scale: listenAnim }] }]}
         >
-          <Ionicons
-            name={'volume-high'}
-            size={32}
-            color={listening ? 'gold' : Colors.text}
-          />
+          {isReel ? (
+            // Use Lucide icons for All Reels - show manual mute preference
+            reelIsManuallyMuted ? (
+              <VolumeX 
+                size={32} 
+                color={isCurrentReel ? "#ff6b6b" : "#ff9999"} 
+                strokeWidth={2}
+              />
+            ) : (
+              <Volume2 
+                size={32} 
+                color={isCurrentReel ? "#00ff88" : "#88ffaa"} 
+                strokeWidth={2}
+              />
+            )
+          ) : (
+            // Use Ionicons for text content
+            <Ionicons
+              name={listening ? 'volume-high' : 'volume-medium'}
+              size={32}
+              color={listening ? 'gold' : Colors.text}
+            />
+          )}
         </Animated.View>
       </TouchableOpacity>
 
@@ -191,9 +269,9 @@ export default function ActionButtons({ fact, style }: ActionButtonsProps) {
           style={[styles.buttonLast, { transform: [{ scale: saveAnim }] }]}
         >
           <Ionicons
-            name={'bookmark'}
+            name={saved ? 'bookmark' : 'bookmark-outline'}
             size={32}
-            color={saved ? 'gold' : Colors.text}
+            color={saved ? '#FFD700' : Colors.text}
           />
         </Animated.View>
       </TouchableOpacity>

@@ -74,16 +74,24 @@ async def get_contents(
         # Transform the data to match the expected frontend format
         transformed_data = []
         for content in response.data:
+            media_url = content.get("media_url", "")
+            
+            # Determine if this is video content based on media_url file extension
+            is_video = media_url and any(media_url.lower().endswith(ext) for ext in ['.mp4', '.mov', '.avi', '.webm', '.m4v'])
+            
             transformed_content = {
                 "id": content["id"],
                 "hook": content["title"],  # title -> hook
                 "summary": content["summary"],  # summary -> fullContent for swiping
                 "fullContent": content["summary"],  # Using summary as the swipeable content
-                "image": content.get("media_url", ""),  # media_url -> image (empty for text content)
+                "image": "" if is_video else media_url,  # Use media_url as image only for non-video content
                 "topic": "general",  # We could enhance this by joining with topics
                 "source": "Database",  # Could be enhanced with actual source name
                 "sourceUrl": content.get("source_url", ""),
                 "readTime": 2,  # Could be calculated or stored
+                "video_url": media_url if is_video else "",  # Use media_url as video_url for video content
+                "tags": [],  # TODO: Add tags support when available in database
+                "contentType": "reel" if is_video else "text"  # Determine content type
             }
             transformed_data.append(transformed_content)
         
@@ -124,6 +132,8 @@ async def create_content(
             "tags": content.tags,
             "difficulty_level": content.difficulty_level,
             "estimated_read_time": content.estimated_read_time,
+            # TODO: Add video_url support after database migration
+            # "video_url": content.video_url,
             "ai_generated": True,
             "created_by": user.id
         }).execute()

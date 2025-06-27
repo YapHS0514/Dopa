@@ -28,15 +28,9 @@ async def get_recommendations(
 
         if not prefs_response.data:
             # No preferences yet, return general content
-            response = supabase.table("contents").select("""
-                *,
-                topics (
-                    id,
-                    name,
-                    color,
-                    icon
-                )
-            """).order("created_at", desc=True).limit(limit).execute()
+            response = supabase.table("contents").select(
+                "id, title, summary, content_type, media_url, source_url, created_at"
+            ).order("created_at", desc=True).limit(limit).execute()
             logger.info(f"No preferences response: {response.data}")
         else:
             # Get content based on preferences
@@ -44,26 +38,29 @@ async def get_recommendations(
             logger.info(f"Preferred topics: {preferred_topics}")
 
             if preferred_topics:
-                response = supabase.table("contents").select("""
-                    *,
-                    topics (
-                        id,
-                        name,
-                        color,
-                        icon
-                    )
-                """).in_("topic_id", preferred_topics).order("created_at", desc=True).limit(limit).execute()
+                # Get content IDs linked to preferred topics via content_topics junction table
+                content_topics_response = supabase.table("content_topics").select(
+                    "content_id"
+                ).in_("topic_id", preferred_topics).execute()
+                
+                preferred_content_ids = list(set([
+                    ct["content_id"] for ct in content_topics_response.data
+                ])) if content_topics_response.data else []
+                
+                if preferred_content_ids:
+                    response = supabase.table("contents").select(
+                        "id, title, summary, content_type, media_url, source_url, created_at"
+                    ).in_("id", preferred_content_ids).order("created_at", desc=True).limit(limit).execute()
+                else:
+                    # No content found for preferred topics, return general content
+                    response = supabase.table("contents").select(
+                        "id, title, summary, content_type, media_url, source_url, created_at"
+                    ).order("created_at", desc=True).limit(limit).execute()
                 logger.info(f"Response: {response.data}")
             else:
-                response = supabase.table("contents").select("""
-                    *,
-                    topics (
-                        id,
-                        name,
-                        color,
-                        icon
-                    )
-                """).order("created_at", desc=True).limit(limit).execute()
+                response = supabase.table("contents").select(
+                    "id, title, summary, content_type, media_url, source_url, created_at"
+                ).order("created_at", desc=True).limit(limit).execute()
         
         return {"data": response.data}
     except Exception as e:

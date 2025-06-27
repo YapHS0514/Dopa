@@ -9,6 +9,7 @@ class ContentRequest(BaseModel):
     tags: List[str] = []
     difficulty_level: int = 1
     estimated_read_time: int = 30
+    video_url: Optional[str] = None  # Add video support for reels
 
 class UserInteractionRequest(BaseModel):
     content_id: str
