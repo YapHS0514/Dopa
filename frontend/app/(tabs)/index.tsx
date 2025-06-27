@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -18,23 +18,15 @@ import { Colors } from '../../constants/Colors';
 import { ContentCard } from '../../components/ContentCard';
 import ActionButtons from '../../components/ActionButtons';
 import StreakButton from '../../components/StreakButton';
+import { useInfiniteContent, Fact } from '../../hooks/useInfiniteContent';
 import { apiClient } from '../../lib/api';
+import { ReelCard } from '../../components/ReelCard';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-// Type definition for facts from API
-interface Fact {
-  id: string;
-  hook: string;
-  summary: string;
-  fullContent: string;
-  image: string;
-  topic: string;
-  source: string;
-  sourceUrl: string;
-  readTime: number;
-  tags?: string[];
-}
+const getContentType = (fact: Fact): 'text' | 'reel' => {
+  return fact.video_url ? 'reel' : 'text';
+};
 
 const getFactCards = (fact: Fact) => {
   const cards = [
@@ -129,43 +121,115 @@ const FactCarousel = ({ fact }: { fact: Fact }) => {
         }}
       />
       {/* Action buttons positioned on the right side */}
-      <ActionButtons fact={fact} style={styles.actionButtons} />
+      <ActionButtons fact={{ ...fact, contentType: 'text' as const }} style={styles.actionButtons} />
+    </View>
+  );
+};
+
+// New component for Reel content
+const ReelContent = ({ fact, isVisible }: { fact: Fact; isVisible: boolean }) => {
+  // Ensure the fact object has the correct contentType for ActionButtons
+  const reelFact = {
+    ...fact,
+    contentType: 'reel' as const,
+  };
+
+  return (
+    <View style={{ flex: 1 }}>
+      <ReelCard
+        videoUrl={fact.video_url!}
+        title={fact.hook}
+        tags={fact.tags}
+        isVisible={isVisible}
+        contentId={fact.id}
+        onLoadStart={() => console.log(`Loading reel: ${fact.id}`)}
+        onLoad={() => console.log(`Reel loaded: ${fact.id}`)}
+        onError={(error: string) => console.error(`Reel error for ${fact.id}:`, error)}
+      />
+      {/* Action buttons for reels with correct contentType */}
+      <ActionButtons fact={reelFact} style={styles.reelActionButtons} />
     </View>
   );
 };
 
 export default function IndexScreen() {
   const [factIndex, setFactIndex] = useState(0);
-  const [facts, setFacts] = useState<Fact[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const flatListRef = useRef<FlatList>(null);
+  
+  // Use the new infinite content hook
+  const { 
+    content: facts, 
+    loadMoreContent, 
+    isLoading: loading, 
+    error, 
+    hasMore,
+    isInitialized,
+    trackInteraction 
+  } = useInfiniteContent();
 
   // TODO: Fetch user data from backend to get current streak
   const currentStreak = 7; // Placeholder - replace with actual backend data
 
-  // Fetch personalized content from backend
-  useEffect(() => {
-    const fetchContent = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        console.log('Fetching personalized content...');
-        const response = (await apiClient.getContents(20, 0)) as {
-          data: Fact[];
-        };
-        console.log('Content response:', response);
-        setFacts(response.data || []);
-      } catch (error: any) {
-        console.error('Error fetching content:', error);
-        setError('Failed to load content. Please try again.');
-        Alert.alert('Error', 'Failed to load content. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Handle scroll events for infinite loading
+  const handleScroll = useCallback((event: any) => {
+    const { contentOffset } = event.nativeEvent;
+    const currentIndex = Math.round(contentOffset.y / SCREEN_HEIGHT);
+    
+    // Minimal logging for production
+    if (currentIndex !== factIndex) {
+      console.log(`Scroll: moved to item ${currentIndex}/${facts.length}`);
+    }
+    
+    // Track view when user switches to a new fact
+    if (currentIndex !== factIndex && facts[currentIndex]) {
+      setFactIndex(currentIndex);
+      // Track content view
+      trackInteraction(facts[currentIndex].id, 'view', 1);
+    }
+    
+    // More aggressive loading: load when at 2nd item from end OR when at 3rd item
+    const shouldLoadMore = (
+      (currentIndex >= facts.length - 2) || // Traditional: 2 from end
+      (currentIndex >= Math.max(2, facts.length - 3)) // OR: 3 from end if we have content
+    ) && hasMore && !loading;
+    
+    if (shouldLoadMore) {
+      console.log(`Loading more content...`);
+      loadMoreContent();
+    }
+  }, [facts, factIndex, loadMoreContent, hasMore, loading, trackInteraction]);
 
-    fetchContent();
-  }, []);
+  // Separate handler for momentum scroll end (when user stops swiping)
+  const handleMomentumScrollEnd = useCallback((event: any) => {
+    const { contentOffset } = event.nativeEvent;
+    const currentIndex = Math.round(contentOffset.y / SCREEN_HEIGHT);
+    
+    // Force load more check on momentum end
+    if (currentIndex >= facts.length - 2 && hasMore && !loading) {
+      console.log(`Loading more content after scroll stop`);
+      loadMoreContent();
+    }
+  }, [facts.length, hasMore, loading, loadMoreContent]);
+
+  // Enhanced render function to handle mixed content types
+  const renderItem = useCallback(({ item, index }: { item: Fact; index: number }) => {
+    const contentType = getContentType(item);
+    const isVisible = index === factIndex;
+    
+    if (contentType === 'reel') {
+      return <ReelContent fact={item} isVisible={isVisible} />;
+    } else {
+      return <FactCarousel fact={item} />;
+    }
+  }, [factIndex]);
+
+  const keyExtractor = useCallback((item: Fact) => item.id, []);
+
+  const getItemLayout = useCallback((data: any, index: number) => ({
+    length: SCREEN_HEIGHT,
+    offset: SCREEN_HEIGHT * index,
+    index,
+  }), []);
 
   return (
     <SafeAreaView style={styles.root}>
@@ -185,7 +249,7 @@ export default function IndexScreen() {
         <Text style={styles.headerText}>DOPA</Text>
         <StreakButton streakCount={currentStreak} />
       </View>
-      {loading ? (
+      {loading && facts.length === 0 ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.tint} />
           <Text style={styles.loadingText}>
@@ -198,21 +262,8 @@ export default function IndexScreen() {
           <TouchableOpacity
             style={styles.retryButton}
             onPress={() => {
-              const fetchContent = async () => {
-                try {
-                  setLoading(true);
-                  setError(null);
-                  const response = (await apiClient.getContents(20, 0)) as {
-                    data: Fact[];
-                  };
-                  setFacts(response.data || []);
-                } catch (error: any) {
-                  setError('Failed to load content. Please try again.');
-                } finally {
-                  setLoading(false);
-                }
-              };
-              fetchContent();
+              console.log('Retrying content load...');
+              loadMoreContent();
             }}
           >
             <Text style={styles.retryButtonText}>Retry</Text>
@@ -227,26 +278,30 @@ export default function IndexScreen() {
         </View>
       ) : (
         <FlatList
+          ref={flatListRef}
           data={facts}
           pagingEnabled
           showsVerticalScrollIndicator={false}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <FactCarousel fact={item} />}
+          keyExtractor={keyExtractor}
+          renderItem={renderItem}
+          getItemLayout={getItemLayout}
           style={{ flex: 1 }}
-          onMomentumScrollEnd={(e) => {
-            const idx = Math.round(
-              e.nativeEvent.contentOffset.y / SCREEN_HEIGHT
-            );
-            setFactIndex(idx);
-            // TODO: Track fact viewing analytics to backend
-            // Example: await api.trackFactView(facts[idx].id)
-          }}
-          getItemLayout={(_, index) => ({
-            length: SCREEN_HEIGHT,
-            offset: SCREEN_HEIGHT * index,
-            index,
-          })}
+          onScroll={handleScroll}
+          onMomentumScrollEnd={handleMomentumScrollEnd}
+          scrollEventThrottle={16}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={3}
+          windowSize={5}
+          initialNumToRender={2}
+          updateCellsBatchingPeriod={50}
         />
+      )}
+      
+      {/* Loading indicator for infinite scroll */}
+      {loading && facts.length > 0 && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="small" color={Colors.tint} />
+        </View>
       )}
     </SafeAreaView>
   );
@@ -340,5 +395,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.text,
     textAlign: 'center',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    bottom: 100,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingVertical: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    borderRadius: 20,
+    marginHorizontal: 20,
+  },
+  reelActionButtons: {
+    position: 'absolute',
+    right: 15,
+    bottom: 200,
+    zIndex: 10,
   },
 });
