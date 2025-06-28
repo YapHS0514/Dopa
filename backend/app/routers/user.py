@@ -171,7 +171,7 @@ async def get_user_coins(user: User = Depends(get_current_user)):
             raise HTTPException(status_code=404, detail="User profile not found")
         
         return {
-            "coins": profile_response.data["coins"]
+            "coins": profile_response.data["total_coins"]
         }
         
     except Exception as e:
@@ -193,12 +193,12 @@ async def add_user_coins(request: CoinOperationRequest, user: User = Depends(get
         if not profile_response.data:
             raise HTTPException(status_code=404, detail="User profile not found")
         
-        current_coins = profile_response.data["coins"]
+        current_coins = profile_response.data["total_coins"]
         new_balance = current_coins + request.amount
         
         # Update coin balance
         update_response = supabase.table("profiles").update({
-            "coins": new_balance
+            "total_coins": new_balance
         }).eq("user_id", user.id).execute()
         
         if not update_response.data:
@@ -226,12 +226,12 @@ async def spend_user_coins(request: CoinOperationRequest, user: User = Depends(g
         supabase = get_supabase_client()
         
         # Get current coin balance
-        profile_response = supabase.table("profiles").select("coins").eq("user_id", user.id).single().execute()
+        profile_response = supabase.table("profiles").select("total_coins").eq("user_id", user.id).single().execute()
         
         if not profile_response.data:
             raise HTTPException(status_code=404, detail="User profile not found")
         
-        current_coins = profile_response.data["coins"]
+        current_coins = profile_response.data["total_coins"]
         
         if current_coins < request.amount:
             raise HTTPException(status_code=400, detail="Insufficient coins")
@@ -240,7 +240,7 @@ async def spend_user_coins(request: CoinOperationRequest, user: User = Depends(g
         
         # Update coin balance
         update_response = supabase.table("profiles").update({
-            "coins": new_balance
+            "total_coins": new_balance
         }).eq("user_id", user.id).execute()
         
         if not update_response.data:

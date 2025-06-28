@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function RegisterScreen() {
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -31,8 +32,19 @@ export default function RegisterScreen() {
     useState(false);
 
   const handleRegister = async () => {
-    if (!email || !password || !confirmPassword) {
+    if (!username || !email || !password || !confirmPassword) {
       Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    // Validate username
+    if (username.trim().length < 2) {
+      Alert.alert('Error', 'Username must be at least 2 characters long');
+      return;
+    }
+
+    if (username.trim().length > 50) {
+      Alert.alert('Error', 'Username must be less than 50 characters');
       return;
     }
 
@@ -43,14 +55,27 @@ export default function RegisterScreen() {
 
     setLoading(true);
     try {
-      await signUp(email, password);
+      await signUp(email, password, username.trim());
       Alert.alert(
         'Registration Successful',
         'Please check your email for a confirmation link.',
         [{ text: 'OK', onPress: () => router.replace('/(auth)/login') }]
       );
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      // Handle specific error messages
+      if (error.message?.includes('already taken')) {
+        Alert.alert(
+          'Username Taken',
+          'This username is already taken. Please choose a different one.'
+        );
+      } else if (error.message?.includes('Email already registered')) {
+        Alert.alert(
+          'Email Registered',
+          'This email is already registered. Please sign in instead.'
+        );
+      } else {
+        Alert.alert('Error', error.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -97,10 +122,23 @@ export default function RegisterScreen() {
           }}
         >
           <View style={styles.formContainer}>
-            {/* Email */}
+            {/* Username */}
             <View style={styles.inputContainer}>
               <TextInput
                 style={[styles.input, { color: '#000', marginTop: 0 }]}
+                placeholder="Username"
+                placeholderTextColor={Colors.muted}
+                value={username}
+                onChangeText={setUsername}
+                autoCapitalize="none"
+                maxLength={50}
+              />
+            </View>
+
+            {/* Email */}
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={[styles.input, { color: '#000', marginTop: 16 }]}
                 placeholder="Email"
                 placeholderTextColor={Colors.muted}
                 value={email}

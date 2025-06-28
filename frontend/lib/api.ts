@@ -226,8 +226,8 @@ class ApiClient {
   }
 
   // ✅ Auth-related methods (from your friend's version)
-  async signUp(email: string, password: string): Promise<UserResponse> {
-    return this.post('/api/auth/signup', { email, password });
+  async signUp(email: string, password: string, username: string): Promise<UserResponse> {
+    return this.post('/api/auth/signup', { email, password, username });
   }
 
   async signIn(email: string, password: string): Promise<UserResponse> {
