@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from datetime import datetime, date, timedelta
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import logging
 from ..schemas.user import User
 from ..dependencies.auth import get_current_user
@@ -13,6 +13,53 @@ logger = logging.getLogger(__name__)
 class CoinOperationRequest(BaseModel):
     amount: int
     reason: str
+
+class UpdateUsernameRequest(BaseModel):
+    username: str
+
+class UserProfileResponse(BaseModel):
+    id: str
+    email: str
+    full_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    streak_days: int = 0
+    total_coins: int = 0
+    onboarding_completed: bool = False
+
+@router.get("/profile", response_model=UserProfileResponse)
+async def get_user_profile(user: User = Depends(get_current_user)):
+    """Get comprehensive user profile information"""
+    try:
+        logger.info(f"Getting comprehensive profile for user: {user.id}")
+        supabase = get_supabase_client()
+
+        # Get user's profile from database
+        profile_response = supabase.table("profiles").select(
+            "user_id, email, full_name, avatar_url, streak_days, total_coins, onboarding_completed"
+        ).eq("user_id", user.id).single().execute()
+
+        if not profile_response.data:
+            logger.error(f"Profile not found for user: {user.id}")
+            raise HTTPException(status_code=404, detail="Profile not found")
+
+        profile_data = profile_response.data
+        logger.info(f"Profile found for user: {user.id}")
+        
+        return UserProfileResponse(
+            id=user.id,
+            email=profile_data.get("email", ""),
+            full_name=profile_data.get("full_name"),
+            avatar_url=profile_data.get("avatar_url"),
+            streak_days=profile_data.get("streak_days", 0),
+            total_coins=profile_data.get("total_coins", 0),
+            onboarding_completed=profile_data.get("onboarding_completed", False)
+        )
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error getting comprehensive profile for user {user.id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/streak")
 async def get_user_streak(user: User = Depends(get_current_user)):
@@ -118,7 +165,7 @@ async def get_user_coins(user: User = Depends(get_current_user)):
         supabase = get_supabase_client()
         
         # Get user's coin balance from profile
-        profile_response = supabase.table("profiles").select("coins").eq("user_id", user.id).single().execute()
+        profile_response = supabase.table("profiles").select("total_coins").eq("user_id", user.id).single().execute()
         
         if not profile_response.data:
             raise HTTPException(status_code=404, detail="User profile not found")
@@ -141,7 +188,7 @@ async def add_user_coins(request: CoinOperationRequest, user: User = Depends(get
         supabase = get_supabase_client()
         
         # Get current coin balance
-        profile_response = supabase.table("profiles").select("coins").eq("user_id", user.id).single().execute()
+        profile_response = supabase.table("profiles").select("total_coins").eq("user_id", user.id).single().execute()
         
         if not profile_response.data:
             raise HTTPException(status_code=404, detail="User profile not found")
@@ -209,4 +256,88 @@ async def spend_user_coins(request: CoinOperationRequest, user: User = Depends(g
         
     except Exception as e:
         logger.error(f"Error spending user coins: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/profile/avatar")
+async def update_user_avatar(request: dict, user: User = Depends(get_current_user)):
+    """Update user's avatar URL"""
+    try:
+        avatar_url = request.get("avatar_url")
+        if not avatar_url:
+            raise HTTPException(status_code=400, detail="Avatar URL is required")
+        
+        supabase = get_supabase_client()
+        
+        # Update avatar URL in profile
+        update_response = supabase.table("profiles").update({
+            "avatar_url": avatar_url
+        }).eq("user_id", user.id).execute()
+        
+        if not update_response.data:
+            raise HTTPException(status_code=500, detail="Failed to update avatar")
+        
+        logger.info(f"Updated avatar for user {user.id}")
+        
+        return {
+            "message": "Avatar updated successfully",
+            "avatar_url": avatar_url
+        }
+        
+    except Exception as e:
+        logger.error(f"Error updating user avatar: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/profile/username")
+async def update_username(request: UpdateUsernameRequest, user: User = Depends(get_current_user)):
+    """Update user's username (full_name)"""
+    try:
+        username = request.username.strip()
+        
+        # Validate username
+        if not username:
+            raise HTTPException(status_code=400, detail="Username cannot be empty")
+        
+        if len(username) < 2:
+            raise HTTPException(status_code=400, detail="Username must be at least 2 characters long")
+        
+        if len(username) > 50:
+            raise HTTPException(status_code=400, detail="Username must be less than 50 characters")
+        
+        supabase = get_supabase_client()
+        
+        # Update username in profile
+        try:
+            update_response = supabase.table("profiles").update({
+                "full_name": username
+            }).eq("user_id", user.id).execute()
+            
+            if not update_response.data:
+                raise HTTPException(status_code=500, detail="Failed to update username")
+            
+            logger.info(f"Updated username for user {user.id} to: {username}")
+            
+            return {
+                "message": "Username updated successfully",
+                "username": username
+            }
+            
+        except Exception as db_error:
+            error_str = str(db_error).lower()
+            
+            # Check for unique constraint violation
+            if "unique" in error_str or "duplicate" in error_str or "already exists" in error_str:
+                logger.warning(f"Username '{username}' already taken for user {user.id}")
+                raise HTTPException(
+                    status_code=409, 
+                    detail="This username is already taken. Please choose a different one."
+                )
+            
+            # Re-raise other database errors
+            logger.error(f"Database error updating username for user {user.id}: {str(db_error)}")
+            raise HTTPException(status_code=500, detail="Failed to update username")
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error updating username for user {user.id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) 

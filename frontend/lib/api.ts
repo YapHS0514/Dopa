@@ -42,6 +42,16 @@ interface UserProfile {
   updated_at: string;
 }
 
+export interface UserProfileResponse {
+  id: string;
+  email: string;
+  full_name?: string;
+  avatar_url?: string;
+  streak_days: number;
+  total_coins: number;
+  onboarding_completed: boolean;
+}
+
 interface UserResponse {
   id: string;
   email: string;
@@ -230,6 +240,18 @@ class ApiClient {
 
   async getProfile(): Promise<UserProfile> {
     return this.get('/api/auth/profile');
+  }
+
+  async getUserProfile(): Promise<UserProfileResponse> {
+    return this.get('/api/user/profile');
+  }
+
+  async updateUserAvatar(avatarUrl: string): Promise<any> {
+    return this.put('/api/user/profile/avatar', { avatar_url: avatarUrl });
+  }
+
+  async updateUsername(username: string): Promise<any> {
+    return this.put('/api/user/profile/username', { username });
   }
 
   async completeOnboarding(): Promise<void> {

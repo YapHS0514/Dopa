@@ -50,9 +50,7 @@ async def get_user_preferences(user: User = Depends(get_current_user)):
     try:
         logger.info(f"Getting preferences for auth user {user.id}")
         supabase = get_supabase_client()
-        
-        logger.info(f"Found profile ID {profile_id} for auth user {user.id}")
-        
+                
         response = supabase.table("user_topic_preferences").select("""
             *,
             topics (
