@@ -17,6 +17,7 @@ class User(BaseModel):
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
+    username: str
 
 class UserSignIn(BaseModel):
     email: EmailStr
@@ -30,7 +31,7 @@ class UserProfile(BaseModel):
     avatar_url: Optional[str] = None
     total_points: int = 0
     streak_days: int = 0
-    coins: int = 0
+    total_coins: int = 0  # Changed from coins to total_coins for consistency
     last_active: datetime
     onboarding_completed: bool = False
     created_at: datetime
