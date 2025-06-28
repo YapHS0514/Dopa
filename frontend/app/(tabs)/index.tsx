@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { Colors } from '../../constants/Colors';
 import { ContentCard } from '../../components/ContentCard';
 import ActionButtons from '../../components/ActionButtons';
@@ -21,6 +22,7 @@ import StreakButton from '../../components/StreakButton';
 import { useInfiniteContent, Fact } from '../../hooks/useInfiniteContent';
 import { apiClient } from '../../lib/api';
 import { ReelCard } from '../../components/ReelCard';
+import { useReelAudioStore } from '../../lib/store';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -133,9 +135,11 @@ const FactCarousel = ({ fact }: { fact: Fact }) => {
 const ReelContent = ({
   fact,
   isVisible,
+  screenFocused,
 }: {
   fact: Fact;
   isVisible: boolean;
+  screenFocused: boolean;
 }) => {
   // Ensure the fact object has the correct contentType for ActionButtons
   const reelFact = {
@@ -149,7 +153,7 @@ const ReelContent = ({
         videoUrl={fact.video_url!}
         title={fact.hook}
         tags={fact.tags}
-        isVisible={isVisible}
+        isVisible={isVisible && screenFocused} // Only visible if both conditions are true
         contentId={fact.id}
         onLoadStart={() => console.log(`Loading reel: ${fact.id}`)}
         onLoad={() => console.log(`Reel loaded: ${fact.id}`)}
@@ -167,6 +171,10 @@ export default function IndexScreen() {
   const [factIndex, setFactIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const lastTrackedContentId = useRef<string | null>(null);
+  
+  // Navigation focus detection
+  const isFocused = useIsFocused();
+  const { pauseAllVideos } = useReelAudioStore();
 
   // Use the new infinite content hook
   const {
@@ -178,9 +186,18 @@ export default function IndexScreen() {
     isInitialized,
     trackInteraction,
   } = useInfiniteContent();
+  
+  // Pause all videos when screen loses focus
+  useEffect(() => {
+    if (!isFocused) {
+      console.log('📱 IndexScreen: Screen lost focus, pausing all videos');
+      pauseAllVideos();
+    } else {
+      console.log('📱 IndexScreen: Screen gained focus');
+    }
+  }, [isFocused, pauseAllVideos]);
 
-  // TODO: Fetch user data from backend to get current streak
-  const currentStreak = 7; // Placeholder - replace with actual backend data
+  // StreakButton now handles its own data fetching
 
   // Handle scroll events for infinite loading
   const handleScroll = useCallback(
@@ -243,12 +260,12 @@ export default function IndexScreen() {
       const isVisible = index === factIndex;
 
       if (contentType === 'reel') {
-        return <ReelContent fact={item} isVisible={isVisible} />;
+        return <ReelContent fact={item} isVisible={isVisible} screenFocused={isFocused} />;
       } else {
         return <FactCarousel fact={item} />;
       }
     },
-    [factIndex]
+    [factIndex, isFocused]
   );
 
   const keyExtractor = useCallback((item: Fact) => item.id, []);
@@ -278,7 +295,7 @@ export default function IndexScreen() {
           />
         </TouchableOpacity>
         <Text style={styles.headerText}>DOPA</Text>
-        <StreakButton streakCount={currentStreak} />
+        <StreakButton />
       </View>
       {loading && facts.length === 0 ? (
         <View style={styles.loadingContainer}>
@@ -320,11 +337,12 @@ export default function IndexScreen() {
           onScroll={handleScroll}
           onMomentumScrollEnd={handleMomentumScrollEnd}
           scrollEventThrottle={16}
-          removeClippedSubviews={true}
-          maxToRenderPerBatch={3}
-          windowSize={5}
-          initialNumToRender={2}
-          updateCellsBatchingPeriod={50}
+          removeClippedSubviews={false} // Keep videos in memory for better performance
+          maxToRenderPerBatch={2} // Reduced for better video performance
+          windowSize={3} // Smaller window for better memory management
+          initialNumToRender={1} // Start with just one item
+          updateCellsBatchingPeriod={100} // Slower updates for smoother video
+          decelerationRate="fast" // Better snap-to behavior
         />
       )}
 

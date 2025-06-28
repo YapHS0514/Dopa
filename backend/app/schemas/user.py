@@ -30,6 +30,7 @@ class UserProfile(BaseModel):
     avatar_url: Optional[str] = None
     total_points: int = 0
     streak_days: int = 0
+    coins: int = 0
     last_active: datetime
     onboarding_completed: bool = False
     created_at: datetime

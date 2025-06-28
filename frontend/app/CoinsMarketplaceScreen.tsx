@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import CoinBalance from '../components/CoinBalance';
 import { MarketplaceItem } from '../types/MarketplaceItem';
+import { useUserCoins } from '../hooks/useUserCoins';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -46,9 +47,12 @@ const marketplaceItems: MarketplaceItem[] = [
 
 export default function CoinsMarketplaceScreen() {
   const router = useRouter();
-  
-  // TODO: Connect to backend coin balance and inventory system
-  const [coinBalance, setCoinBalance] = useState(1240); // Mock balance
+  const { coins, fetchCoins, spendCoins } = useUserCoins();
+
+  // Fetch coins on component mount
+  React.useEffect(() => {
+    fetchCoins();
+  }, [fetchCoins]);
   const [items, setItems] = useState<MarketplaceItem[]>(marketplaceItems);
   const [animatingItem, setAnimatingItem] = useState<string | null>(null);
   const [floatingCoins, setFloatingCoins] = useState<Array<{id: string, anim: Animated.Value, x: number, y: number}>>([]);
@@ -138,8 +142,8 @@ export default function CoinsMarketplaceScreen() {
     });
   };
 
-  const handlePurchase = (item: MarketplaceItem, buttonScale: Animated.Value) => {
-    if (coinBalance >= item.cost) {
+  const handlePurchase = async (item: MarketplaceItem, buttonScale: Animated.Value) => {
+    if (coins >= item.cost) {
       // Button scale animation
       Animated.sequence([
         Animated.timing(buttonScale, {
@@ -164,9 +168,8 @@ export default function CoinsMarketplaceScreen() {
       const buttonY = 260 + (itemIndex * 105); // Adjusted for new header layout (shifted down by ~40px)
       animateFloatingCoins(buttonX, buttonY);
 
-      // Deduct coins
-      const newBalance = coinBalance - item.cost;
-      setCoinBalance(newBalance);
+      // Spend coins via API
+      await spendCoins(item.cost, `Purchased ${item.title}`);
       
       // Only mark premium as purchased (one-time purchase)
       if (item.id === '1_day_premium') {
@@ -232,15 +235,15 @@ export default function CoinsMarketplaceScreen() {
                 <TouchableOpacity 
                   style={[
                     styles.purchaseButton, 
-                    coinBalance < item.cost && styles.purchaseButtonDisabled
+                    coins < item.cost && styles.purchaseButtonDisabled
                   ]}
                   onPress={() => handlePurchase(item, buttonScale)}
-                  disabled={coinBalance < item.cost}
+                  disabled={coins < item.cost}
                   activeOpacity={0.7}
                 >
                   <Text style={[
                     styles.purchaseButtonText,
-                    coinBalance < item.cost && styles.purchaseButtonTextDisabled
+                    coins < item.cost && styles.purchaseButtonTextDisabled
                   ]}>
                     Buy
                   </Text>
@@ -286,7 +289,7 @@ export default function CoinsMarketplaceScreen() {
         <Text style={styles.title}>Coins Marketplace</Text>
         
         {/* Coin Balance Display */}
-        <CoinBalance balance={coinBalance} />
+        <CoinBalance balance={coins} />
       </View>
 
       {/* Marketplace Items List */}
