@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Modal,
   Share,
   Image,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
@@ -16,33 +18,35 @@ import { useStore } from '../../lib/store';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
-import { MOCK_FACTS, Fact } from '../../constants/MockData';
+import { MOCK_FACTS } from '../../constants/MockData';
+import { Fact } from '../../hooks/useInfiniteContent';
 import { TopicTags } from '../../components/TopicTags';
+import { apiClient } from '../../lib/api';
 
 /**
  * TODO: BACKEND INTEGRATION CHECKLIST FOR SAVED SCREEN
- * 
+ *
  * 1. DATA LAYER:
  *    - Replace MOCK_SAVED_FACTS with real Supabase queries
  *    - Implement saved_facts table: user_id, fact_id, saved_at, user_notes
  *    - Add real-time subscriptions for save/unsave events
  *    - Implement offline caching with sync when online
- * 
+ *
  * 2. USER MANAGEMENT:
  *    - Fetch user's saves limit based on subscription tier
  *    - Track saves count and update in real-time
  *    - Implement premium tier unlimited saves
- * 
+ *
  * 3. ANALYTICS & TRACKING:
  *    - Track saved fact views, modal interactions, shares
  *    - Measure engagement metrics (time spent, scroll depth)
  *    - Log all user interactions for personalization
- * 
+ *
  * 4. CONTENT DELIVERY:
  *    - Implement image CDN with fallbacks
  *    - Add source URL validation and credibility scores
  *    - Track content quality metrics (image load rates, etc.)
- * 
+ *
  * 5. FEATURES TO ADD:
  *    - User notes on saved facts
  *    - Collections/folders for organizing saves
@@ -54,17 +58,46 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_SPACING = 12;
 const GRID_ITEM_WIDTH = (SCREEN_WIDTH - 48 - GRID_SPACING) / 2;
 
-// TODO: BACKEND INTEGRATION - SAVED FACTS DATA
-// TODO: Pull saved cards from user profile (e.g., Supabase 'saved' table)
-// TODO: Implement real-time sync when facts are saved/unsaved from other screens
-// TODO: Add pagination for large numbers of saved facts
-// TODO: Sync save/unsave actions to backend with optimistic update
-// TODO: Handle offline mode - cache saved facts locally
+// Backend saved content interface
+interface SavedContentItem {
+  id: string;
+  created_at: string;
+  content: {
+    id: string;
+    title: string;
+    summary: string;
+    content_type: string;
+    source_url?: string;
+    media_url?: string;
+  };
+}
 
-// Use the same facts as the learn page - simulate saved facts (first 8 facts for demo)
-// TODO: Replace with actual saved facts from user's profile in backend
-// TODO: Fetch saved facts with: userId, factId, savedAt timestamp, userNotes
-const MOCK_SAVED_FACTS = MOCK_FACTS.slice(0, 8);
+// Transform backend data to frontend Fact format
+const transformSavedContentToFact = (savedItem: SavedContentItem): Fact => {
+  const { content } = savedItem;
+
+  // Determine if this is video content
+  const isVideo =
+    content.media_url &&
+    ['.mp4', '.mov', '.avi', '.webm', '.m4v'].some((ext) =>
+      content.media_url!.toLowerCase().endsWith(ext)
+    );
+
+  return {
+    id: content.id,
+    hook: content.title,
+    summary: content.summary,
+    fullContent: content.summary, // Using summary as fullContent for now
+    image: isVideo ? '' : content.media_url || '',
+    topic: 'general', // TODO: Add topic mapping when available
+    source: 'Database',
+    sourceUrl: content.source_url || '',
+    readTime: 2, // TODO: Calculate or get from backend
+    tags: [], // TODO: Add tags when available from backend
+    video_url: isVideo ? content.media_url : '',
+    contentType: isVideo ? ('reel' as const) : ('text' as const),
+  };
+};
 
 export default function SavedScreen() {
   const theme = useStore((state) => state.theme);
@@ -72,20 +105,69 @@ export default function SavedScreen() {
   const [selectedFact, setSelectedFact] = useState<Fact | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
+  // Backend integration state
+  const [savedContent, setSavedContent] = useState<Fact[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Fetch saved content from backend
+  const fetchSavedContent = async (isRefresh = false) => {
+    try {
+      if (isRefresh) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
+      setError(null);
+
+      console.log('Fetching saved content from backend...');
+      const response = (await apiClient.getSavedContent()) as {
+        data: SavedContentItem[];
+      };
+
+      console.log('Raw saved content response:', response);
+
+      // Transform backend data to frontend format
+      const transformedContent = response.data.map(transformSavedContentToFact);
+
+      console.log('Transformed saved content:', transformedContent);
+      setSavedContent(transformedContent);
+    } catch (err: any) {
+      console.error('Error fetching saved content:', err);
+      setError(err.message || 'Failed to load saved content');
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
+
+  // Load saved content on component mount
+  useEffect(() => {
+    fetchSavedContent();
+  }, []);
+
+  // Pull to refresh handler
+  const handleRefresh = () => {
+    fetchSavedContent(true);
+  };
+
   // TODO: BACKEND INTEGRATION - SHARE ANALYTICS
   // TODO: Track share analytics to backend (userId, factId, shareMethod, timestamp)
   // TODO: Implement share attribution tracking for viral content analysis
   const handleShare = async () => {
     if (!selectedFact) return;
-    
+
     try {
-      const shareMessage = `🧠 ${selectedFact.hook}\n\n${selectedFact.summary}${selectedFact.sourceUrl ? `\n\nRead more: ${selectedFact.sourceUrl}` : ''}`;
-      
+      const shareMessage = `🧠 ${selectedFact.hook}\n\n${selectedFact.summary}${
+        selectedFact.sourceUrl ? `\n\nRead more: ${selectedFact.sourceUrl}` : ''
+      }`;
+
       await Share.share({
         message: shareMessage,
         title: 'Interesting Fact from DOPA',
       });
-      
+
       // TODO: Log successful share event to backend analytics
       // TODO: Track which facts are shared most often for content optimization
       // TODO: Implement referral tracking if shared links are clicked
@@ -96,7 +178,7 @@ export default function SavedScreen() {
     }
   };
 
-  const renderSavedItem = (item: (typeof MOCK_SAVED_FACTS)[0]) => (
+  const renderSavedItem = (item: (typeof savedContent)[0]) => (
     <TouchableOpacity
       key={item.id}
       style={styles.gridItem}
@@ -114,16 +196,13 @@ export default function SavedScreen() {
         {item.tags && item.tags.length > 0 && (
           <TopicTags tags={item.tags} style={styles.cardTopicTags} />
         )}
-        
+
         {/* Fact Content */}
         <View style={styles.factContent}>
           <Text style={styles.factTitle} numberOfLines={2}>
             {item.hook}
           </Text>
-          <Text
-            style={styles.factText}
-            numberOfLines={3}
-          >
+          <Text style={styles.factText} numberOfLines={3}>
             {item.summary}
           </Text>
         </View>
@@ -146,13 +225,11 @@ export default function SavedScreen() {
           ]}
         >
           <Text style={[styles.savesText, { color: Colors.textSecondary }]}>
-            Saves remaining:
+            Saved content:
           </Text>
-          {/* TODO: BACKEND INTEGRATION - SAVES LIMIT */}
-          {/* TODO: Replace with dynamic saves count from user profile backend */}
-          {/* TODO: Fetch user's current saves count and subscription limit */}
-          {/* TODO: Implement premium tier with unlimited saves */}
-          <Text style={[styles.savesNumber, { color: Colors.text }]}>8/10</Text>
+          <Text style={[styles.savesNumber, { color: Colors.text }]}>
+            {isLoading ? '...' : savedContent.length}
+          </Text>
         </View>
       </View>
 
@@ -160,8 +237,41 @@ export default function SavedScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+        }
       >
-        <View style={styles.grid}>{MOCK_SAVED_FACTS.map(renderSavedItem)}</View>
+        {isLoading ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color={Colors.text} />
+            <Text style={[styles.loadingText, { color: Colors.textSecondary }]}>
+              Loading saved content...
+            </Text>
+          </View>
+        ) : error ? (
+          <View style={styles.centerContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => fetchSavedContent()}
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : savedContent.length === 0 ? (
+          <View style={styles.centerContainer}>
+            <Text style={[styles.emptyText, { color: Colors.textSecondary }]}>
+              No saved content yet
+            </Text>
+            <Text
+              style={[styles.emptySubtext, { color: Colors.textSecondary }]}
+            >
+              Save interesting facts from the main feed to see them here
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.grid}>{savedContent.map(renderSavedItem)}</View>
+        )}
       </ScrollView>
 
       {/* Modal for displaying full saved fact details */}
@@ -202,10 +312,13 @@ export default function SavedScreen() {
             </View>
 
             {selectedFact && (
-              <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                style={styles.modalContent}
+                showsVerticalScrollIndicator={false}
+              >
                 {/* Fact Hook Title */}
                 <Text style={styles.modalFactTitle}>{selectedFact.hook}</Text>
-                
+
                 {/* Topic Tags */}
                 {selectedFact.tags && selectedFact.tags.length > 0 && (
                   <View style={styles.modalTagsContainer}>
@@ -224,7 +337,10 @@ export default function SavedScreen() {
                         // TODO: Log image loading errors to backend for debugging
                         // TODO: Implement fallback image service or CDN
                         // TODO: Track image load failure rates for content quality
-                        console.log('Failed to load image:', selectedFact.image);
+                        console.log(
+                          'Failed to load image:',
+                          selectedFact.image
+                        );
                       }}
                     />
                   </View>
@@ -235,11 +351,16 @@ export default function SavedScreen() {
 
                 {/* Full Content (if available) */}
                 {selectedFact.fullContent && (
-                  <Text style={styles.modalFullContent}>{selectedFact.fullContent}</Text>
+                  <Text style={styles.modalFullContent}>
+                    {selectedFact.fullContent}
+                  </Text>
                 )}
 
                 {/* Inline Share Button */}
-                <TouchableOpacity style={styles.inlineShareButton} onPress={handleShare}>
+                <TouchableOpacity
+                  style={styles.inlineShareButton}
+                  onPress={handleShare}
+                >
                   <Feather name="share" size={18} color="#3B82F6" />
                   <Text style={styles.inlineShareText}>Share this fact</Text>
                 </TouchableOpacity>
@@ -250,7 +371,7 @@ export default function SavedScreen() {
                 {/* TODO: Track source link clicks for content attribution */}
                 {/* TODO: Implement source credibility scoring */}
                 {selectedFact.sourceUrl && (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.sourceButton}
                     onPress={() => {
                       // TODO: Open source URL in in-app browser
@@ -345,7 +466,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: '#374151', // Dark gray for good readability
   },
-  
+
   // Modal styles
   modalOverlay: {
     flex: 1,
@@ -466,5 +587,50 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'SF-Pro-Display',
     fontWeight: '600',
+  },
+  errorText: {
+    color: '#ff6b6b',
+    fontSize: 16,
+    fontFamily: 'SF-Pro-Display',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    fontSize: 16,
+    fontFamily: 'SF-Pro-Display',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: 'SF-Pro-Display',
+    fontWeight: '600',
+  },
+  emptyText: {
+    fontSize: 18,
+    fontFamily: 'SF-Pro-Display',
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    fontFamily: 'SF-Pro-Display',
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
