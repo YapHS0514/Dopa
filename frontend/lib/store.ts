@@ -42,11 +42,13 @@ export const useStore = create<AppState>((set) => ({
     })),
 }));
 
-// Clean Reel Audio Store for TikTok-like behavior
+// Enhanced Reel Audio Store for TikTok-like behavior with proper cleanup
 interface ReelAudioState {
   // Track user's manual mute preferences per reel
   manualMutePreferences: { [contentId: string]: boolean };
   currentlyPlayingId: string | null;
+  // Track video refs for proper cleanup
+  videoRefs: { [contentId: string]: any };
   
   // User actions
   setManualMute: (contentId: string, isMuted: boolean) => void;
@@ -56,14 +58,18 @@ interface ReelAudioState {
   isManuallyMuted: (contentId: string) => boolean;
   shouldBeMuted: (contentId: string, isVisible: boolean) => boolean;
   
-  // Playback tracking
+  // Playback tracking and cleanup
   setCurrentlyPlaying: (contentId: string | null) => void;
   getCurrentlyPlaying: () => string | null;
+  registerVideoRef: (contentId: string, ref: any) => void;
+  unregisterVideoRef: (contentId: string) => void;
+  unloadPreviousVideo: (newContentId: string) => Promise<void>;
 }
 
 export const useReelAudioStore = create<ReelAudioState>((set, get) => ({
   manualMutePreferences: {},
   currentlyPlayingId: null,
+  videoRefs: {},
   
   setManualMute: (contentId: string, isMuted: boolean) => {
     set((state) => ({
@@ -110,4 +116,38 @@ export const useReelAudioStore = create<ReelAudioState>((set, get) => ({
   },
   
   getCurrentlyPlaying: () => get().currentlyPlayingId,
+  
+  registerVideoRef: (contentId: string, ref: any) => {
+    set((state) => ({
+      videoRefs: { ...state.videoRefs, [contentId]: ref }
+    }));
+    console.log(`🔧 Store: Registered video ref for ${contentId}`);
+  },
+  
+  unregisterVideoRef: (contentId: string) => {
+    set((state) => {
+      const newRefs = { ...state.videoRefs };
+      delete newRefs[contentId];
+      return { videoRefs: newRefs };
+    });
+    console.log(`🔧 Store: Unregistered video ref for ${contentId}`);
+  },
+  
+  unloadPreviousVideo: async (newContentId: string) => {
+    const state = get();
+    const previousId = state.currentlyPlayingId;
+    
+    if (previousId && previousId !== newContentId && state.videoRefs[previousId]) {
+      console.log(`🔄 Store: Unloading previous video ${previousId} for new video ${newContentId}`);
+      try {
+        const previousRef = state.videoRefs[previousId];
+        await previousRef.pauseAsync();
+        await previousRef.setIsMutedAsync(true);
+        await previousRef.unloadAsync();
+        console.log(`✅ Store: Successfully unloaded ${previousId}`);
+      } catch (error) {
+        console.error(`❌ Store: Error unloading ${previousId}:`, error);
+      }
+    }
+  },
 })); 
