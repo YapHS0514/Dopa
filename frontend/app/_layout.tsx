@@ -11,6 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useColorScheme, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Sentry from '@sentry/react-native';
+import { Audio } from 'expo-av';
 
 import { AuthProvider } from '../contexts/AuthContext';
 import { SavedContentProvider } from '../contexts/SavedContentContext';
@@ -39,6 +40,37 @@ export default function RootLayout() {
   const [loaded] = useFonts({
     'SF-Pro-Display': require('../assets/fonts/SFPRODISPLAYREGULAR.otf'),
   });
+
+  // 🎧 Configure global audio mode for video playback stability
+  useEffect(() => {
+    const configureGlobalAudio = async () => {
+      try {
+        console.log('🎧 Configuring global audio mode for video stability...');
+        
+        // Request audio permissions
+        const { status } = await Audio.requestPermissionsAsync();
+        if (status !== 'granted') {
+          console.warn('⚠️ Audio permission not granted');
+          return;
+        }
+
+        // Set optimal audio mode for video content
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          allowsRecordingIOS: false,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
+        
+        console.log('✅ Global audio mode configured successfully');
+      } catch (error) {
+        console.error('❌ Failed to configure global audio mode:', error);
+      }
+    };
+
+    configureGlobalAudio();
+  }, []);
 
   useEffect(() => {
     if (loaded) {

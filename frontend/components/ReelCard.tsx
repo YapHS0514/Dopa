@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,7 +7,7 @@ import {
   Text,
   ActivityIndicator,
 } from 'react-native';
-import { Video, ResizeMode, AVPlaybackStatus, Audio } from 'expo-av';
+import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { Colors } from '../constants/Colors';
 import { TopicTags } from './TopicTags';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,13 +21,11 @@ type ReelCardProps = {
   title: string;
   tags?: string[];
   isVisible: boolean;
-  contentId: string; // Add contentId for audio state management
+  contentId: string;
   onLoadStart?: () => void;
   onLoad?: () => void;
   onError?: (error: string) => void;
 };
-
-
 
 export function ReelCard({
   videoUrl,
@@ -42,126 +40,164 @@ export function ReelCard({
   const [isLoading, setIsLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const videoRef = useRef<Video>(null);
+  const cleanupInProgress = useRef(false);
+  const mountedRef = useRef(true);
 
-  // Use clean Zustand store for TikTok-like behavior
-  const { shouldBeMuted, setCurrentlyPlaying } = useReelAudioStore();
+  // Enhanced Zustand store with cleanup capabilities
+  const { 
+    shouldBeMuted, 
+    setCurrentlyPlaying, 
+    registerVideoRef, 
+    unregisterVideoRef,
+    unloadPreviousVideo 
+  } = useReelAudioStore();
+  
   const isMuted = shouldBeMuted(contentId, isVisible);
   
-  console.log(`🎥 ReelCard ${contentId}: isVisible = ${isVisible}, shouldBeMuted = ${isMuted}`);
+  console.log(`🎥 ReelCard ${contentId}: isVisible=${isVisible}, shouldBeMuted=${isMuted}, loaded=${isVideoLoaded}`);
 
-  // Configure audio mode for proper mobile playback
+  // Register video ref with store for cleanup management
   useEffect(() => {
-    const configureAudio = async () => {
-      try {
-        // Request audio permissions first
-        const { status } = await Audio.requestPermissionsAsync();
-        if (status !== 'granted') {
-          console.warn(`⚠️ Audio permission not granted for ${contentId}`);
-          return;
+    if (videoRef.current && isVideoLoaded) {
+      registerVideoRef(contentId, videoRef.current);
+      return () => {
+        unregisterVideoRef(contentId);
+      };
+    }
+  }, [contentId, isVideoLoaded, registerVideoRef, unregisterVideoRef]);
+
+  // Simple check for safe operations
+  const canPerformOperation = () => {
+    return videoRef.current && mountedRef.current && !cleanupInProgress.current;
+  };
+
+  // Preload video when component mounts (even if not visible yet)
+  useEffect(() => {
+    if (!hasError && videoRef.current && !isVideoLoaded) {
+      const preloadVideo = async () => {
+        try {
+          console.log(`🔄 ReelCard ${contentId}: Preloading video...`);
+          await videoRef.current!.loadAsync({ uri: videoUrl }, { shouldPlay: false }, false);
+          console.log(`✅ ReelCard ${contentId}: Video preloaded`);
+        } catch (error) {
+          console.log(`⚠️ ReelCard ${contentId}: Preload failed, will try on visibility`);
         }
+      };
+      
+      // Small delay before preloading to not interfere with current video
+      setTimeout(preloadVideo, 200);
+    }
+  }, [contentId, videoUrl, hasError, isVideoLoaded]);
 
-        // Configure audio mode for video playback
-        await Audio.setAudioModeAsync({
-          playsInSilentModeIOS: true, // Critical for iOS
-          allowsRecordingIOS: false,
-          staysActiveInBackground: false,
-          shouldDuckAndroid: false, // Don't duck other audio
-          playThroughEarpieceAndroid: false, // Use speakers
-        });
-        console.log(`🔊 Audio mode configured for ${contentId}`);
-      } catch (error) {
-        console.error(`❌ Failed to configure audio mode:`, error);
-      }
-    };
-
-    configureAudio();
-  }, [contentId]);
-
-  // TikTok-like onEnter/onExit visibility logic
+  // Enhanced visibility effect with proper cleanup
   useEffect(() => {
     const handleVisibilityChange = async () => {
-      if (!videoRef.current) return;
+      if (cleanupInProgress.current) return;
 
       if (isVisible && !hasError) {
-        // 🎬 ON ENTER: Play and handle audio
-        console.log(`🔊 ReelCard ${contentId}: ON ENTER - Starting playback`);
+        // 🎬 ON ENTER: Unload previous video and start this one
+        console.log(`🎬 ReelCard ${contentId}: ON ENTER - Starting playback`);
+        
+        // First, unload any previous video to prevent conflicts
+        await unloadPreviousVideo(contentId);
+        
+        // Minimal delay to ensure previous video is fully unloaded
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        // Always try to load and play, regardless of current loaded state
+        if (!videoRef.current || !mountedRef.current) return;
         
         try {
-          // Ensure video is loaded first
+          console.log(`📥 ReelCard ${contentId}: Loading video...`);
+          
+          // Set a timeout for loading to prevent infinite loading
+          const loadTimeout = setTimeout(() => {
+            if (mountedRef.current && !isVideoLoaded) {
+              console.warn(`⏰ ReelCard ${contentId}: Loading timeout, marking as error`);
+              setHasError(true);
+              setIsLoading(false);
+            }
+          }, 10000); // 10 second timeout
+          
+          // Load the video with optimized settings
+          await videoRef.current.loadAsync(
+            { uri: videoUrl }, 
+            { 
+              shouldPlay: false,
+              volume: 1.0,
+              isMuted: isMuted,
+              isLooping: true
+            }, 
+            false
+          );
+          
+          clearTimeout(loadTimeout);
+          
+          // Verify video loaded successfully
           const status = await videoRef.current.getStatusAsync();
           if (!status.isLoaded) {
-            console.log(`⏳ ReelCard ${contentId}: Video not loaded yet, waiting...`);
-            return;
+            throw new Error('Video failed to load properly');
           }
-
-          // Set audio properties
-          console.log(`🔊 Setting volume to 1.0 and muted to ${isMuted} for ${contentId}`);
-          await videoRef.current.setVolumeAsync(1.0);
-          await videoRef.current.setIsMutedAsync(isMuted);
           
-          // Small delay to ensure audio settings take effect
-          await new Promise(resolve => setTimeout(resolve, 100));
-          
-          // Start playback
+          // Start playback immediately
           await videoRef.current.playAsync();
-          setIsPlaying(true);
-          setCurrentlyPlaying(contentId);
           
-          // Verify final status
-          const finalStatus = await videoRef.current.getStatusAsync();
-          if (finalStatus.isLoaded) {
-            console.log(`✅ ReelCard ${contentId}: Playing - Volume: ${finalStatus.volume}, Muted: ${finalStatus.isMuted}, Playing: ${finalStatus.isPlaying}`);
+          if (mountedRef.current) {
+            setIsPlaying(true);
+            setIsVideoLoaded(true);
+            setCurrentlyPlaying(contentId);
           }
+          
+          console.log(`✅ ReelCard ${contentId}: Successfully started playback`);
         } catch (error) {
           console.error(`❌ ReelCard ${contentId}: Error starting playback:`, error);
+          if (mountedRef.current) {
+            setHasError(true);
+            setIsLoading(false);
+          }
         }
       } else {
-        // 🛑 ON EXIT: Pause and mute
-        console.log(`🔇 ReelCard ${contentId}: ON EXIT - Stopping playback`);
+        // 🛑 ON EXIT: Pause, mute, and unload
+        console.log(`🛑 ReelCard ${contentId}: ON EXIT - Stopping and unloading`);
         
-        try {
-          await videoRef.current.pauseAsync();
-          await videoRef.current.setIsMutedAsync(true); // Always mute on exit
-          setIsPlaying(false);
-          
-          if (!isVisible) {
-            setCurrentlyPlaying(null);
+        if (videoRef.current && isVideoLoaded) {
+          try {
+            await videoRef.current.pauseAsync();
+            await videoRef.current.setIsMutedAsync(true);
+            await videoRef.current.unloadAsync();
+            
+            if (mountedRef.current) {
+              setIsPlaying(false);
+              setIsVideoLoaded(false);
+              if (!isVisible) {
+                setCurrentlyPlaying(null);
+              }
+            }
+            
+            console.log(`✅ ReelCard ${contentId}: Successfully stopped and unloaded`);
+          } catch (error) {
+            console.error(`❌ ReelCard ${contentId}: Error stopping:`, error);
           }
-          
-          console.log(`⏸️ ReelCard ${contentId}: Paused and muted`);
-        } catch (error) {
-          console.error(`❌ ReelCard ${contentId}: Error pausing:`, error);
         }
       }
     };
 
     handleVisibilityChange();
-  }, [isVisible, hasError, contentId, isMuted, setCurrentlyPlaying]);
+  }, [isVisible, hasError, contentId, isMuted, setCurrentlyPlaying, unloadPreviousVideo, videoUrl]);
 
   // Handle mute state changes for visible videos
   useEffect(() => {
-    const updateMuteState = async () => {
-      if (videoRef.current && isVisible && isPlaying) {
-        console.log(`🔊 ReelCard ${contentId}: Updating mute state to ${isMuted}`);
-        try {
-          // Ensure video is still loaded
-          const status = await videoRef.current.getStatusAsync();
-          if (!status.isLoaded) {
-            console.log(`⏳ ReelCard ${contentId}: Video not loaded for mute update`);
-            return;
-          }
+    if (!isVisible || !isPlaying || !isVideoLoaded) return;
 
-          await videoRef.current.setIsMutedAsync(isMuted);
-          
-          // Small delay to let the change take effect
-          await new Promise(resolve => setTimeout(resolve, 50));
-          
-          // Verify the change
-          const newStatus = await videoRef.current.getStatusAsync();
-          if (newStatus.isLoaded) {
-            console.log(`🔊 ReelCard ${contentId}: Mute updated - Volume: ${newStatus.volume}, Muted: ${newStatus.isMuted}`);
-          }
+    const updateMuteState = async () => {
+      console.log(`🔊 ReelCard ${contentId}: Updating mute state to ${isMuted}`);
+      
+      if (canPerformOperation()) {
+        try {
+          await videoRef.current!.setIsMutedAsync(isMuted);
+          console.log(`✅ ReelCard ${contentId}: Mute state updated to ${isMuted}`);
         } catch (error) {
           console.error(`❌ ReelCard ${contentId}: Error updating mute:`, error);
         }
@@ -169,43 +205,83 @@ export function ReelCard({
     };
 
     updateMuteState();
-  }, [isMuted, isVisible, isPlaying, contentId]);
+  }, [isMuted, isVisible, isPlaying, isVideoLoaded, contentId]);
+
+  // Component cleanup on unmount
+  useEffect(() => {
+    return () => {
+      console.log(`🧹 ReelCard ${contentId}: Component unmounting - cleaning up`);
+      mountedRef.current = false;
+      cleanupInProgress.current = true;
+      
+      // Cleanup video resources
+      if (videoRef.current) {
+        videoRef.current.unloadAsync().catch((error) => {
+          console.error(`❌ ReelCard ${contentId}: Cleanup error:`, error);
+        });
+      }
+    };
+  }, [contentId]);
 
   const handlePlaybackStatusUpdate = (status: AVPlaybackStatus) => {
+    if (!mountedRef.current) return;
+
     if (status.isLoaded) {
-      setIsLoading(false);
+      if (!isVideoLoaded) {
+        setIsVideoLoaded(true);
+        setIsLoading(false);
+        console.log(`📹 ReelCard ${contentId}: Video loaded via status update`);
+      }
       setIsPlaying(status.isPlaying);
       
       // Loop the video
       if (status.didJustFinish && !status.isLooping) {
         videoRef.current?.replayAsync();
       }
+      
+      // Check for corrupted video (duration is 0 or very small)
+      if (status.durationMillis && status.durationMillis < 100) {
+        console.warn(`⚠️ ReelCard ${contentId}: Video might be corrupted (duration: ${status.durationMillis}ms)`);
+        setHasError(true);
+        setIsLoading(false);
+      }
+    } else if (status.error) {
+      console.error(`❌ ReelCard ${contentId}: Playback error:`, status.error);
+      setHasError(true);
+      setIsLoading(false);
     }
   };
 
   const handleVideoLoad = () => {
+    if (!mountedRef.current) return;
+    console.log(`📹 ReelCard ${contentId}: Video loaded successfully`);
+    setIsVideoLoaded(true);
     setIsLoading(false);
     setHasError(false);
     onLoad?.();
   };
 
   const handleVideoError = (error: any) => {
-    console.error('Video load error:', error);
+    if (!mountedRef.current) return;
+    console.error(`❌ ReelCard ${contentId}: Video load error:`, error);
+    console.error(`❌ ReelCard ${contentId}: Video URL:`, videoUrl);
     setIsLoading(false);
     setHasError(true);
+    setIsVideoLoaded(false);
     onError?.(error.message || 'Failed to load video');
   };
 
-  // Mute state is now managed entirely through the Zustand store
-  // and controlled by the ActionButtons component
-
-  const togglePlayPause = () => {
-    if (videoRef.current) {
+  const togglePlayPause = async () => {
+    if (!isVideoLoaded || !canPerformOperation()) return;
+    
+    try {
       if (isPlaying) {
-        videoRef.current.pauseAsync();
+        await videoRef.current!.pauseAsync();
       } else {
-        videoRef.current.playAsync();
+        await videoRef.current!.playAsync();
       }
+    } catch (error) {
+      console.error(`❌ ReelCard ${contentId}: Error toggling play/pause:`, error);
     }
   };
 
@@ -213,8 +289,19 @@ export function ReelCard({
     return (
       <View style={styles.errorContainer}>
         <Ionicons name="videocam-off" size={48} color="#666" />
-        <Text style={styles.errorText}>Failed to load video</Text>
+        <Text style={styles.errorText}>Video unavailable</Text>
         <Text style={styles.errorSubtext}>{title}</Text>
+        <TouchableOpacity 
+          style={styles.retryButton}
+          onPress={() => {
+            console.log(`🔄 ReelCard ${contentId}: Retrying video load...`);
+            setHasError(false);
+            setIsLoading(true);
+            setIsVideoLoaded(false);
+          }}
+        >
+          <Text style={styles.retryText}>Tap to retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -238,15 +325,20 @@ export function ReelCard({
           style={styles.video}
           resizeMode={ResizeMode.COVER}
           isLooping
-          isMuted={false} // Let manual control handle muting
-          volume={1.0} // Always max volume, use mute for audio control
-          shouldPlay={false} // We control playback manually
+          isMuted={true} // Start muted, will be controlled manually
+          volume={1.0}
+          shouldPlay={false} // Manual control only
           useNativeControls={false}
+          progressUpdateIntervalMillis={500}
+          positionMillis={0}
           onLoad={handleVideoLoad}
           onError={handleVideoError}
           onLoadStart={() => {
-            setIsLoading(true);
-            onLoadStart?.();
+            if (mountedRef.current) {
+              setIsLoading(true);
+              console.log(`🔄 ReelCard ${contentId}: Video load started`);
+              onLoadStart?.();
+            }
           }}
           onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
         />
@@ -259,7 +351,7 @@ export function ReelCard({
         )}
 
         {/* Play/Pause Indicator */}
-        {!isLoading && !isPlaying && (
+        {!isLoading && !isPlaying && isVideoLoaded && (
           <View style={styles.playOverlay}>
             <Ionicons name="play" size={64} color="rgba(255,255,255,0.9)" />
           </View>
@@ -277,12 +369,11 @@ export function ReelCard({
           <Text style={styles.debugText}>
             Visible: {isVisible ? 'YES' : 'NO'} | 
             Muted: {isMuted ? 'YES' : 'NO'} | 
-            Playing: {isPlaying ? 'YES' : 'NO'}
+            Playing: {isPlaying ? 'YES' : 'NO'} |
+            Loaded: {isVideoLoaded ? 'YES' : 'NO'}
           </Text>
         </View>
       )}
-
-      {/* Note: Mute controls are now handled by ActionButtons component */}
     </Animatable.View>
   );
 }
@@ -351,30 +442,6 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
-  controls: {
-    position: 'absolute',
-    bottom: 80,
-    right: 20,
-    flexDirection: 'column',
-    alignItems: 'center',
-  },
-  muteButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  mutedButton: {
-    backgroundColor: 'rgba(255,107,107,0.2)',
-    borderWidth: 1,
-    borderColor: '#ff6b6b',
-  },
-  unmutedButton: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
   topicTags: {
     position: 'absolute',
     top: 60,
@@ -394,5 +461,19 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontFamily: 'SF-Pro-Display',
+  },
+  retryButton: {
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  retryText: {
+    color: '#fff',
+    fontSize: 14,
+    textAlign: 'center',
   },
 }); 
