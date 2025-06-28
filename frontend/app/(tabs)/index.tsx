@@ -121,13 +121,22 @@ const FactCarousel = ({ fact }: { fact: Fact }) => {
         }}
       />
       {/* Action buttons positioned on the right side */}
-      <ActionButtons fact={{ ...fact, contentType: 'text' as const }} style={styles.actionButtons} />
+      <ActionButtons
+        fact={{ ...fact, contentType: 'text' as const }}
+        style={styles.actionButtons}
+      />
     </View>
   );
 };
 
 // New component for Reel content
-const ReelContent = ({ fact, isVisible }: { fact: Fact; isVisible: boolean }) => {
+const ReelContent = ({
+  fact,
+  isVisible,
+}: {
+  fact: Fact;
+  isVisible: boolean;
+}) => {
   // Ensure the fact object has the correct contentType for ActionButtons
   const reelFact = {
     ...fact,
@@ -144,7 +153,9 @@ const ReelContent = ({ fact, isVisible }: { fact: Fact; isVisible: boolean }) =>
         contentId={fact.id}
         onLoadStart={() => console.log(`Loading reel: ${fact.id}`)}
         onLoad={() => console.log(`Reel loaded: ${fact.id}`)}
-        onError={(error: string) => console.error(`Reel error for ${fact.id}:`, error)}
+        onError={(error: string) =>
+          console.error(`Reel error for ${fact.id}:`, error)
+        }
       />
       {/* Action buttons for reels with correct contentType */}
       <ActionButtons fact={reelFact} style={styles.reelActionButtons} />
@@ -155,81 +166,101 @@ const ReelContent = ({ fact, isVisible }: { fact: Fact; isVisible: boolean }) =>
 export default function IndexScreen() {
   const [factIndex, setFactIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
-  
+  const lastTrackedContentId = useRef<string | null>(null);
+
   // Use the new infinite content hook
-  const { 
-    content: facts, 
-    loadMoreContent, 
-    isLoading: loading, 
-    error, 
+  const {
+    content: facts,
+    loadMoreContent,
+    isLoading: loading,
+    error,
     hasMore,
     isInitialized,
-    trackInteraction 
+    trackInteraction,
   } = useInfiniteContent();
 
   // TODO: Fetch user data from backend to get current streak
   const currentStreak = 7; // Placeholder - replace with actual backend data
 
   // Handle scroll events for infinite loading
-  const handleScroll = useCallback((event: any) => {
-    const { contentOffset } = event.nativeEvent;
-    const currentIndex = Math.round(contentOffset.y / SCREEN_HEIGHT);
-    
-    // Minimal logging for production
-    if (currentIndex !== factIndex) {
-      console.log(`Scroll: moved to item ${currentIndex}/${facts.length}`);
-    }
-    
-    // Track view when user switches to a new fact
-    if (currentIndex !== factIndex && facts[currentIndex]) {
-      setFactIndex(currentIndex);
-      // Track content view
-      trackInteraction(facts[currentIndex].id, 'view', 1);
-    }
-    
-    // More aggressive loading: load when at 2nd item from end OR when at 3rd item
-    const shouldLoadMore = (
-      (currentIndex >= facts.length - 2) || // Traditional: 2 from end
-      (currentIndex >= Math.max(2, facts.length - 3)) // OR: 3 from end if we have content
-    ) && hasMore && !loading;
-    
-    if (shouldLoadMore) {
-      console.log(`Loading more content...`);
-      loadMoreContent();
-    }
-  }, [facts, factIndex, loadMoreContent, hasMore, loading, trackInteraction]);
+  const handleScroll = useCallback(
+    (event: any) => {
+      const { contentOffset } = event.nativeEvent;
+      const currentIndex = Math.round(contentOffset.y / SCREEN_HEIGHT);
+
+      // Minimal logging for production
+      if (currentIndex !== factIndex) {
+        console.log(`Scroll: moved to item ${currentIndex}/${facts.length}`);
+      }
+
+      // Track view when user switches to a new fact
+      if (currentIndex !== factIndex && facts[currentIndex]) {
+        const currentContentId = facts[currentIndex].id;
+
+        // Only track if we haven't already tracked this content
+        if (lastTrackedContentId.current !== currentContentId) {
+          setFactIndex(currentIndex);
+          lastTrackedContentId.current = currentContentId;
+          // Track content view
+          trackInteraction(currentContentId, 'view', 1);
+        }
+      }
+
+      // More aggressive loading: load when at 2nd item from end OR when at 3rd item
+      const shouldLoadMore =
+        (currentIndex >= facts.length - 2 || // Traditional: 2 from end
+          currentIndex >= Math.max(2, facts.length - 3)) && // OR: 3 from end if we have content
+        hasMore &&
+        !loading;
+
+      if (shouldLoadMore) {
+        console.log(`Loading more content...`);
+        loadMoreContent();
+      }
+    },
+    [facts, factIndex, loadMoreContent, hasMore, loading, trackInteraction]
+  );
 
   // Separate handler for momentum scroll end (when user stops swiping)
-  const handleMomentumScrollEnd = useCallback((event: any) => {
-    const { contentOffset } = event.nativeEvent;
-    const currentIndex = Math.round(contentOffset.y / SCREEN_HEIGHT);
-    
-    // Force load more check on momentum end
-    if (currentIndex >= facts.length - 2 && hasMore && !loading) {
-      console.log(`Loading more content after scroll stop`);
-      loadMoreContent();
-    }
-  }, [facts.length, hasMore, loading, loadMoreContent]);
+  const handleMomentumScrollEnd = useCallback(
+    (event: any) => {
+      const { contentOffset } = event.nativeEvent;
+      const currentIndex = Math.round(contentOffset.y / SCREEN_HEIGHT);
+
+      // Force load more check on momentum end
+      if (currentIndex >= facts.length - 2 && hasMore && !loading) {
+        console.log(`Loading more content after scroll stop`);
+        loadMoreContent();
+      }
+    },
+    [facts.length, hasMore, loading, loadMoreContent]
+  );
 
   // Enhanced render function to handle mixed content types
-  const renderItem = useCallback(({ item, index }: { item: Fact; index: number }) => {
-    const contentType = getContentType(item);
-    const isVisible = index === factIndex;
-    
-    if (contentType === 'reel') {
-      return <ReelContent fact={item} isVisible={isVisible} />;
-    } else {
-      return <FactCarousel fact={item} />;
-    }
-  }, [factIndex]);
+  const renderItem = useCallback(
+    ({ item, index }: { item: Fact; index: number }) => {
+      const contentType = getContentType(item);
+      const isVisible = index === factIndex;
+
+      if (contentType === 'reel') {
+        return <ReelContent fact={item} isVisible={isVisible} />;
+      } else {
+        return <FactCarousel fact={item} />;
+      }
+    },
+    [factIndex]
+  );
 
   const keyExtractor = useCallback((item: Fact) => item.id, []);
 
-  const getItemLayout = useCallback((data: any, index: number) => ({
-    length: SCREEN_HEIGHT,
-    offset: SCREEN_HEIGHT * index,
-    index,
-  }), []);
+  const getItemLayout = useCallback(
+    (data: any, index: number) => ({
+      length: SCREEN_HEIGHT,
+      offset: SCREEN_HEIGHT * index,
+      index,
+    }),
+    []
+  );
 
   return (
     <SafeAreaView style={styles.root}>
@@ -296,7 +327,7 @@ export default function IndexScreen() {
           updateCellsBatchingPeriod={50}
         />
       )}
-      
+
       {/* Loading indicator for infinite scroll */}
       {loading && facts.length > 0 && (
         <View style={styles.loadingOverlay}>

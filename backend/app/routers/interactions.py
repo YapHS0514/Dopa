@@ -14,6 +14,26 @@ async def record_interaction(
     """Record user interaction with content"""
     try:
         supabase = get_supabase_client()
+        
+        # Check if this exact interaction already exists (to prevent duplicates)
+        existing_response = supabase.table("user_interactions").select("id").eq(
+            "user_id", user.id
+        ).eq(
+            "content_id", interaction.content_id
+        ).eq(
+            "interaction_type", interaction.interaction_type
+        ).execute()
+        
+        # For view interactions, allow multiple records but limit to prevent spam
+        if interaction.interaction_type == "view":
+            # Allow multiple view records but limit to reasonable amount per content
+            if existing_response.data and len(existing_response.data) >= 5:
+                return {"message": "View already recorded (limit reached)", "duplicate": True}
+        else:
+            # For other interactions (like, save, etc.), prevent exact duplicates
+            if existing_response.data:
+                return {"message": "Interaction already recorded", "duplicate": True}
+        
         response = supabase.table("user_interactions").insert({
             "user_id": user.id,
             "content_id": interaction.content_id,

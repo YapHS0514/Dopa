@@ -44,7 +44,6 @@ async def signup(user_data: UserCreate):
                 "user_id": user.id,
                 "email": user_data.email,
                 "onboarding_completed": False,
-                "total_points": 0,
                 "streak_days": 0,
                 "last_active": "now()"
             }
