@@ -187,6 +187,18 @@ class ApiClient {
     return this.delete(`/api/saved/${savedContentId}`);
   }
 
+  async getUserCoins() {
+    return this.get('/api/user/coins');
+  }
+
+  async addUserCoins(amount: number, reason: string) {
+    return this.post('/api/user/coins/add', { amount, reason });
+  }
+
+  async spendUserCoins(amount: number, reason: string) {
+    return this.post('/api/user/coins/spend', { amount, reason });
+  }
+
   async getRecommendations(limit = 10) {
     return this.get(`/api/recommendations?limit=${limit}`);
   }

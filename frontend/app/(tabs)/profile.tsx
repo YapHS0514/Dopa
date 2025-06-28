@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { useAuth } from '../../hooks/useAuth';
+import { useUserCoins } from '../../hooks/useUserCoins';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -34,9 +35,12 @@ const SETTINGS_OPTIONS = [
 export default function ProfileScreen() {
   const router = useRouter();
   const { signOut } = useAuth();
-  
-  // TODO: Fetch real coin balance from backend per user account
-  const coinBalance = 1240; // Mock balance
+  const { coins, fetchCoins } = useUserCoins();
+
+  // Fetch coins on component mount
+  React.useEffect(() => {
+    fetchCoins();
+  }, [fetchCoins]);
 
   const handleSignOut = async () => {
     try {
@@ -130,7 +134,7 @@ export default function ProfileScreen() {
           style={styles.coinRow}
           onPress={() => router.push('/CoinsMarketplaceScreen')}
         >
-          <Text style={styles.coinText}>🪙 {coinBalance.toLocaleString()} Coins</Text>
+          <Text style={styles.coinText}>🪙 {coins.toLocaleString()} Coins</Text>
           <Text style={styles.viewLink}>View Marketplace →</Text>
         </TouchableOpacity>
 

@@ -1,5 +1,5 @@
 // streak.tsx
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,8 @@ import { useStore } from '../lib/store';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
+import { useStreakData } from '../hooks/useStreakData';
+import StreakCelebrationModal from '../components/StreakCelebrationModal';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -38,21 +40,33 @@ const MONTHS = [
 
 const YEARS = Array.from({ length: 2100 - 2024 + 1 }, (_, i) => 2024 + i);
 
-const MOCK_DATA = {
-  currentStreak: 6,
-  activeDaysThisMonth: 15,
-  streakRevives: 2,
-  activeDays: [1, 2, 3, 5, 7, 8, 10, 12, 14, 15, 17, 19, 21, 22, 24],
-};
-
 export default function StreakScreen() {
   const theme = useStore((state) => state.theme);
+  const {
+    activeDays,
+    streakDays,
+    currentStreak,
+    bestStreak,
+    streakRevivalCount,
+    todayCompleted,
+    rewardEarned,
+    isLoading,
+    showStreakModal,
+    setShowStreakModal,
+    fetchStreakData,
+    markCelebrationShown,
+  } = useStreakData();
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [dropdownVisible, setDropdownVisible] = useState(false);
   const [dropdownY, setDropdownY] = useState(0);
   const dropdownAnim = useRef(new Animated.Value(0)).current;
   const monthYearBarRef = useRef<View>(null);
+
+  // Fetch streak data on mount
+  useEffect(() => {
+    fetchStreakData();
+  }, [fetchStreakData]);
 
   const getDaysInMonth = (month: number, year: number) => {
     return new Date(year, month + 1, 0).getDate();
@@ -72,7 +86,11 @@ export default function StreakScreen() {
     }
 
     for (let i = 1; i <= daysInMonth; i++) {
-      const isActive = MOCK_DATA.activeDays.includes(i);
+      // Check if this day is in the streak days for the current month/year
+      const currentDate = new Date(currentYear, currentMonth, i);
+      const dateStr = currentDate.toISOString().split('T')[0];
+      const isActive = streakDays.includes(dateStr);
+      
       days.push(
         <View key={i} style={styles.calendarDay}>
           <View
@@ -188,13 +206,19 @@ export default function StreakScreen() {
       >
         <View style={styles.header}>
           <Text style={[styles.streakCount, { color: Colors.tint }]}>
-            {MOCK_DATA.currentStreak} day streak! 🔥
+            {currentStreak} day streak! 🔥
           </Text>
           <View
             style={[styles.encouragementBox, { backgroundColor: '#10B98120' }]}
           >
             <Text style={[styles.encouragementText, { color: Colors.tint }]}>
-              You're on fire! Keep going! 🎯
+              {currentStreak >= 7
+                ? "You're absolutely crushing it! 🚀"
+                : currentStreak >= 3
+                ? "Keep the momentum going! 💪"
+                : currentStreak > 0
+                ? "Great start! Keep it up! ⭐"
+                : "Start your learning streak today! 📚"}
             </Text>
           </View>
         </View>
@@ -236,7 +260,7 @@ export default function StreakScreen() {
             ]}
           >
             <Text style={[styles.statValue, { color: Colors.text }]}>
-              {MOCK_DATA.activeDaysThisMonth}
+              {activeDays}
             </Text>
             <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
               Active Days
@@ -250,7 +274,7 @@ export default function StreakScreen() {
             ]}
           >
             <Text style={[styles.statValue, { color: Colors.text }]}>
-              {MOCK_DATA.streakRevives}
+              {streakRevivalCount}
             </Text>
             <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
               Streak Revives
@@ -281,21 +305,32 @@ export default function StreakScreen() {
         </View>
 
         <View style={styles.rewardProgress}>
-          <Text style={[styles.rewardText, { color: Colors.textSecondary }]}>
-            🎁 Maintain streak for 4 more days to unlock a special reward!
-          </Text>
-          <View style={styles.progressBarContainer}>
-            <View
-              style={[styles.progressBar, { backgroundColor: '#F59E0B20' }]}
-            >
-              <View
-                style={[
-                  styles.progressFill,
-                  { backgroundColor: '#F59E0B', width: '60%' },
-                ]}
-              />
-            </View>
-          </View>
+          {rewardEarned ? (
+            <Text style={[styles.rewardText, { color: Colors.tint }]}>
+              🎉 Congratulations! You've earned 100 coins! 💰
+            </Text>
+          ) : (
+            <>
+              <Text style={[styles.rewardText, { color: Colors.textSecondary }]}>
+                💰 Maintain streak for {7 - (currentStreak % 7)} more days to earn 100 coins!
+              </Text>
+              <View style={styles.progressBarContainer}>
+                <View
+                  style={[styles.progressBar, { backgroundColor: '#F59E0B20' }]}
+                >
+                  <View
+                    style={[
+                      styles.progressFill,
+                      { 
+                        backgroundColor: '#F59E0B', 
+                        width: `${((currentStreak % 7) / 7) * 100}%` 
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
+            </>
+          )}
         </View>
       </ScrollView>
 
@@ -395,6 +430,13 @@ export default function StreakScreen() {
           </Animated.View>
         </TouchableOpacity>
       )}
+
+      {/* Streak Celebration Modal */}
+      <StreakCelebrationModal
+        visible={showStreakModal}
+        currentStreak={currentStreak}
+        onClose={markCelebrationShown}
+      />
     </SafeAreaView>
   );
 }

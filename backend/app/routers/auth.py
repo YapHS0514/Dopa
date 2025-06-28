@@ -131,6 +131,7 @@ async def signin(user_data: UserSignIn):
                 "onboarding_completed": False,
                 "total_points": 0,
                 "streak_days": 0,
+                "coins": 0,
                 "last_active": "now()"
             }
             
