@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import ActionButtons from '../components/ActionButtons';
 import { Fact } from '../hooks/useInfiniteContent';
 import { ReelCard } from '../components/ReelCard';
 import { Ionicons } from '@expo/vector-icons';
+import { useReelAudioStore } from '../lib/store';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -163,6 +164,22 @@ export default function SavedContentView({
   onBack,
 }: SavedContentViewProps) {
   const contentType = getContentType(fact);
+  const { pauseAllVideos } = useReelAudioStore();
+
+  // Cleanup when component unmounts - pause any playing videos
+  useEffect(() => {
+    return () => {
+      console.log('🧹 SavedContentView: Component unmounting, pausing videos');
+      pauseAllVideos();
+    };
+  }, [pauseAllVideos]);
+
+  // Enhanced back handler that also pauses videos
+  const handleBack = useCallback(() => {
+    console.log('🔙 SavedContentView: Back button pressed, pausing videos');
+    pauseAllVideos();
+    onBack();
+  }, [pauseAllVideos, onBack]);
 
   return (
     <SafeAreaView style={styles.root}>
@@ -170,7 +187,7 @@ export default function SavedContentView({
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={onBack}
+          onPress={handleBack}
           activeOpacity={0.7}
         >
           <Ionicons name="arrow-back" size={24} color="#fff" />
