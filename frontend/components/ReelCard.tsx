@@ -66,15 +66,10 @@ export function ReelCard({
     shouldBeMuted,
     setCurrentlyPlaying,
     registerVideoRef,
-  const {
-    shouldBeMuted,
-    setCurrentlyPlaying,
-    registerVideoRef,
     unregisterVideoRef,
     getCurrentlyPlaying,
     allReelsMuted,
   } = useReelAudioStore();
-
 
   const isMuted = shouldBeMuted(contentId, isVisible);
   const isCurrentlyPlaying = getCurrentlyPlaying() === contentId;
