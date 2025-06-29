@@ -40,7 +40,7 @@ const getFactCards = (fact: Fact) => {
       isHookCard: true,
       sourceUrl: undefined,
     },
-    ...fact.summary
+    ...fact.fullContent
       .split('.')
       .filter(Boolean)
       .map((sentence: string, idx: number) => ({
@@ -51,6 +51,14 @@ const getFactCards = (fact: Fact) => {
         isHookCard: undefined,
         sourceUrl: undefined,
       })),
+    {
+      key: 'summary',
+      title: 'Summary',
+      body: fact.summary,
+      isSourceCard: false,
+      isHookCard: undefined,
+      sourceUrl: undefined,
+    },
     {
       key: 'source',
       title: 'Source',
@@ -73,7 +81,25 @@ const FactCarousel = ({
   liked,
   saved,
   listenLoading,
-}: any) => {
+  onEngagementTracked,
+  contentEngagementTracked,
+}: {
+  fact: Fact;
+  isPlaying?: boolean;
+  onListen?: () => void;
+  onLike?: () => void;
+  onShare?: () => void;
+  onSave?: () => void;
+  liked?: boolean;
+  saved?: boolean;
+  listenLoading?: boolean;
+  onEngagementTracked?: (
+    contentId: string,
+    engagementType: string,
+    value: number
+  ) => void;
+  contentEngagementTracked?: React.MutableRefObject<Set<string>>;
+}) => {
   const cards = getFactCards(fact);
   const [cardIndex, setCardIndex] = useState(0);
   const hasTrackedInterested = useRef(false);
@@ -125,7 +151,11 @@ const FactCarousel = ({
           const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
           setCardIndex(idx);
 
+<<<<<<< HEAD
           // Track engagement based on swipe behavior
+=======
+          // Engagement tracking logic from 1-549
+>>>>>>> 21b1403 (maintained engagement tracking functionality in index.tsx)
           if (idx > 0 && !hasTrackedInterested.current) {
             // User swiped at least once - "INTERESTED"
             console.log(
@@ -154,7 +184,6 @@ const FactCarousel = ({
   );
 };
 
-// New component for Reel content
 const ReelContent = ({
   fact,
   isVisible,
@@ -167,6 +196,7 @@ const ReelContent = ({
   onSave,
   liked,
   saved,
+  onEngagementTracked,
 }: {
   fact: Fact;
   isVisible: boolean;
@@ -179,8 +209,13 @@ const ReelContent = ({
   onSave: () => void;
   liked: boolean;
   saved: boolean;
+  onEngagementTracked?: (
+    contentId: string,
+    engagementType: string,
+    value: number
+  ) => void;
 }) => {
-  // Ensure the fact object has the correct contentType for PostActions
+  // Ensure the fact object has the correct contentType for ActionButtons
   const reelFact = {
     ...fact,
     contentType: 'reel' as const,
@@ -241,7 +276,15 @@ export default function IndexScreen() {
     }
   }, [isFocused, pauseAllVideos, pauseAllTTS]);
 
-  // StreakButton now handles its own data fetching
+  // Engagement tracking state from 1-549
+  const contentEngagementTracked = useRef<Set<string>>(new Set());
+  const trackEngagement = useCallback(
+    (contentId: string, engagementType: string, value: number) => {
+      contentEngagementTracked.current.add(contentId);
+      trackInteraction(contentId, engagementType, value);
+    },
+    [trackInteraction]
+  );
 
   // Track content engagement per item
   const contentEngagementTracked = useRef<Set<string>>(new Set());
@@ -266,27 +309,37 @@ export default function IndexScreen() {
         console.log(`Scroll: moved to item ${currentIndex}/${facts.length}`);
       }
 
+      // Engagement tracking for skipped text content (from 1-549)
+      if (currentIndex !== factIndex && facts[factIndex]) {
+        const previousContent = facts[factIndex];
+        const contentType = getContentType(previousContent);
+        if (
+          contentType === 'text' &&
+          !contentEngagementTracked.current.has(previousContent.id)
+        ) {
+          console.log(
+            `📖 TextContent ${previousContent.id}: Left without swiping - tracking as skip`
+          );
+          trackInteraction(previousContent.id, 'skip', -2);
+          contentEngagementTracked.current.add(previousContent.id);
+        }
+      }
+
       // Track view when user switches to a new fact
       if (currentIndex !== factIndex && facts[currentIndex]) {
         const currentContentId = facts[currentIndex].id;
-
-        // Only track if we haven't already tracked this content
         if (lastTrackedContentId.current !== currentContentId) {
           setFactIndex(currentIndex);
           lastTrackedContentId.current = currentContentId;
-
-          // Stop any currently playing TTS when switching content
           pauseAllTTS();
-
-          // Track content view
           trackInteraction(currentContentId, 'view', 1);
         }
       }
 
       // More aggressive loading: load when at 2nd item from end OR when at 3rd item
       const shouldLoadMore =
-        (currentIndex >= facts.length - 2 || // Traditional: 2 from end
-          currentIndex >= Math.max(2, facts.length - 3)) && // OR: 3 from end if we have content
+        (currentIndex >= facts.length - 2 ||
+          currentIndex >= Math.max(2, facts.length - 3)) &&
         hasMore &&
         !loading;
 
@@ -330,7 +383,6 @@ export default function IndexScreen() {
       if (contentType === 'reel') {
         isMuted = useReelAudioStore.getState().isManuallyMuted(item.id);
       }
-
       if (contentType === 'reel') {
         return (
           <ReelContent
@@ -345,6 +397,7 @@ export default function IndexScreen() {
             onSave={() => {}}
             liked={false}
             saved={false}
+            onEngagementTracked={trackEngagement}
           />
         );
       } else {
@@ -359,11 +412,13 @@ export default function IndexScreen() {
             liked={false}
             saved={false}
             listenLoading={false}
+            onEngagementTracked={trackEngagement}
+            contentEngagementTracked={contentEngagementTracked}
           />
         );
       }
     },
-    [factIndex, isFocused, currentlyPlayingId]
+    [factIndex, isFocused, currentlyPlayingId, trackEngagement]
   );
 
   const keyExtractor = useCallback((item: Fact) => item.id, []);
@@ -435,16 +490,14 @@ export default function IndexScreen() {
           onScroll={handleScroll}
           onMomentumScrollEnd={handleMomentumScrollEnd}
           scrollEventThrottle={16}
-          removeClippedSubviews={false} // Keep videos in memory for better performance
-          maxToRenderPerBatch={2} // Reduced for better video performance
-          windowSize={3} // Smaller window for better memory management
-          initialNumToRender={1} // Start with just one item
-          updateCellsBatchingPeriod={100} // Slower updates for smoother video
-          decelerationRate="fast" // Better snap-to behavior
+          removeClippedSubviews={false}
+          maxToRenderPerBatch={2}
+          windowSize={3}
+          initialNumToRender={1}
+          updateCellsBatchingPeriod={100}
+          decelerationRate="fast"
         />
       )}
-
-      {/* Loading indicator for infinite scroll */}
       {loading && facts.length > 0 && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="small" color={Colors.tint} />
