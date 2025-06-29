@@ -13,5 +13,5 @@ class ContentRequest(BaseModel):
 
 class UserInteractionRequest(BaseModel):
     content_id: str
-    interaction_type: str  # 'like', 'dislike', 'save', 'view'
+    interaction_type: str  # 'like', 'save', 'view', 'skip', 'partial', 'interested', 'engaged'
     interaction_value: int 

@@ -25,6 +25,12 @@ type ReelCardProps = {
   onLoadStart?: () => void;
   onLoad?: () => void;
   onError?: (error: string) => void;
+  onEngagementTracked?: (
+    contentId: string,
+    engagementType: string,
+    value: number
+  ) => void;
+  disableEngagementTracking?: boolean; // For saved content view
 };
 
 export function ReelCard({
@@ -36,6 +42,8 @@ export function ReelCard({
   onLoadStart,
   onLoad,
   onError,
+  onEngagementTracked,
+  disableEngagementTracking = false,
 }: ReelCardProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -48,19 +56,26 @@ export function ReelCard({
   const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const playbackStatusRef = useRef<AVPlaybackStatus | null>(null);
 
+  // Enhanced engagement tracking
+  const watchStartTime = useRef<number | null>(null);
+  const hasTrackedEngagement = useRef(false);
+  const totalWatchTime = useRef(0);
+
   // Enhanced Zustand store with cleanup capabilities
-  const { 
-    shouldBeMuted, 
-    setCurrentlyPlaying, 
-    registerVideoRef, 
+  const {
+    shouldBeMuted,
+    setCurrentlyPlaying,
+    registerVideoRef,
     unregisterVideoRef,
-    getCurrentlyPlaying
+    getCurrentlyPlaying,
   } = useReelAudioStore();
-  
+
   const isMuted = shouldBeMuted(contentId, isVisible);
   const isCurrentlyPlaying = getCurrentlyPlaying() === contentId;
-  
-  console.log(`🎥 ReelCard ${contentId}: isVisible=${isVisible}, shouldBeMuted=${isMuted}, loaded=${isVideoLoaded}, playing=${isPlaying}`);
+
+  console.log(
+    `🎥 ReelCard ${contentId}: isVisible=${isVisible}, shouldBeMuted=${isMuted}, loaded=${isVideoLoaded}, playing=${isPlaying}`
+  );
 
   // Register video ref with store for cleanup management
   useEffect(() => {
@@ -80,37 +95,90 @@ export function ReelCard({
     }
   }, []);
 
+  // Track engagement when user leaves this reel
+  const trackEngagementOnLeave = useCallback(() => {
+    if (
+      disableEngagementTracking ||
+      hasTrackedEngagement.current ||
+      !watchStartTime.current
+    )
+      return;
+
+    const watchDuration = (Date.now() - watchStartTime.current) / 1000; // Convert to seconds
+    totalWatchTime.current += watchDuration;
+
+    let engagementType: string;
+    let engagementValue: number;
+
+    if (totalWatchTime.current < 6) {
+      engagementType = 'skip';
+      engagementValue = -2;
+    } else if (totalWatchTime.current < 12) {
+      engagementType = 'partial';
+      engagementValue = 0;
+    } else {
+      engagementType = 'engaged';
+      engagementValue = 2;
+    }
+
+    console.log(
+      `📊 ReelCard ${contentId}: Watch time ${totalWatchTime.current.toFixed(
+        1
+      )}s -> ${engagementType} (${engagementValue})`
+    );
+
+    hasTrackedEngagement.current = true;
+    onEngagementTracked?.(contentId, engagementType, engagementValue);
+
+    // Reset for potential re-entry
+    watchStartTime.current = null;
+  }, [contentId, onEngagementTracked, disableEngagementTracking]);
+
   // Safe video operation wrapper
-  const safeVideoOperation = useCallback(async (operation: () => Promise<void>, operationName: string) => {
-    if (!videoRef.current || !mountedRef.current) {
-      console.log(`⚠️ ReelCard ${contentId}: Skipping ${operationName} - video ref or component not available`);
-      return false;
-    }
-    
-    try {
-      await operation();
-      return true;
-    } catch (error) {
-      console.error(`❌ ReelCard ${contentId}: Error in ${operationName}:`, error);
-      return false;
-    }
-  }, [contentId]);
+  const safeVideoOperation = useCallback(
+    async (operation: () => Promise<void>, operationName: string) => {
+      if (!videoRef.current || !mountedRef.current) {
+        console.log(
+          `⚠️ ReelCard ${contentId}: Skipping ${operationName} - video ref or component not available`
+        );
+        return false;
+      }
+
+      try {
+        await operation();
+        return true;
+      } catch (error) {
+        console.error(
+          `❌ ReelCard ${contentId}: Error in ${operationName}:`,
+          error
+        );
+        return false;
+      }
+    },
+    [contentId]
+  );
 
   // Auto-retry logic with exponential backoff
   const autoRetry = useCallback(async () => {
     if (retryCount >= 3 || autoRetrying) {
-      console.log(`❌ ReelCard ${contentId}: Max retries reached or already retrying`);
+      console.log(
+        `❌ ReelCard ${contentId}: Max retries reached or already retrying`
+      );
       return;
     }
 
     setAutoRetrying(true);
     const backoffDelay = Math.min(1000 * Math.pow(2, retryCount), 5000); // Max 5 seconds
-    
-    console.log(`🔄 ReelCard ${contentId}: Auto-retry ${retryCount + 1}/3 in ${backoffDelay}ms`);
-    
+
+    console.log(
+      `🔄 ReelCard ${contentId}: Auto-retry ${
+        retryCount + 1
+      }/3 in ${backoffDelay}ms`
+    );
+
     setTimeout(() => {
       if (mountedRef.current) {
-        setRetryCount(prev => prev + 1);
+        setRetryCount((prev) => prev + 1);
         setHasError(false);
         setIsLoading(true);
         setIsVideoLoaded(false);
@@ -120,86 +188,111 @@ export function ReelCard({
   }, [contentId, retryCount, autoRetrying]);
 
   // Optimized video loading function
-  const loadVideo = useCallback(async (shouldPlay: boolean = false) => {
-    if (!videoRef.current || !mountedRef.current) return false;
-
-    clearLoadingTimeout();
-    
-    // Set loading timeout (8 seconds for better UX)
-    loadingTimeoutRef.current = setTimeout(() => {
-      if (mountedRef.current && !isVideoLoaded) {
-        console.warn(`⏰ ReelCard ${contentId}: Loading timeout`);
-        setHasError(true);
-        setIsLoading(false);
-        autoRetry();
-      }
-    }, 8000);
-
-    return await safeVideoOperation(async () => {
-      console.log(`📥 ReelCard ${contentId}: Loading video (shouldPlay: ${shouldPlay})`);
-      
-      if (!videoRef.current) {
-        throw new Error('Video ref is null during loading');
-      }
-      
-      await videoRef.current.loadAsync(
-        { uri: videoUrl }, 
-        { 
-          shouldPlay: false, // Always start paused for better control
-          volume: 1.0,
-          isMuted: true, // Always start muted, we'll update this after loading
-          isLooping: true,
-          progressUpdateIntervalMillis: 500,
-        }, 
-        false
-      );
-      
-      // Verify video loaded successfully with proper null check
-      if (!videoRef.current) {
-        throw new Error('Video ref became null after loading');
-      }
-      
-      const status = await videoRef.current.getStatusAsync();
-      if (!status.isLoaded) {
-        throw new Error('Video failed to load properly');
-      }
+  const loadVideo = useCallback(
+    async (shouldPlay: boolean = false) => {
+      if (!videoRef.current || !mountedRef.current) return false;
 
       clearLoadingTimeout();
-      
-      if (mountedRef.current) {
-        setIsVideoLoaded(true);
-        setIsLoading(false);
-        setHasError(false);
-        setRetryCount(0); // Reset retry count on successful load
-        
-        // Update mute state after successful loading to prevent audio glitches
-        if (videoRef.current) {
-          try {
-            await videoRef.current.setIsMutedAsync(isMuted);
-            console.log(`🔊 ReelCard ${contentId}: Mute state set to ${isMuted} after loading`);
-          } catch (error) {
-            console.error(`❌ ReelCard ${contentId}: Error setting mute state after loading:`, error);
+
+      // Set loading timeout (8 seconds for better UX)
+      loadingTimeoutRef.current = setTimeout(() => {
+        if (mountedRef.current && !isVideoLoaded) {
+          console.warn(`⏰ ReelCard ${contentId}: Loading timeout`);
+          setHasError(true);
+          setIsLoading(false);
+          autoRetry();
+        }
+      }, 8000);
+
+      return await safeVideoOperation(async () => {
+        console.log(
+          `📥 ReelCard ${contentId}: Loading video (shouldPlay: ${shouldPlay})`
+        );
+
+        if (!videoRef.current) {
+          throw new Error('Video ref is null during loading');
+        }
+
+        await videoRef.current.loadAsync(
+          { uri: videoUrl },
+          {
+            shouldPlay: false, // Always start paused for better control
+            volume: 1.0,
+            isMuted: true, // Always start muted, we'll update this after loading
+            isLooping: true,
+            progressUpdateIntervalMillis: 500,
+          },
+          false
+        );
+
+        // Verify video loaded successfully with proper null check
+        if (!videoRef.current) {
+          throw new Error('Video ref became null after loading');
+        }
+
+        const status = await videoRef.current.getStatusAsync();
+        if (!status.isLoaded) {
+          throw new Error('Video failed to load properly');
+        }
+
+        clearLoadingTimeout();
+
+        if (mountedRef.current) {
+          setIsVideoLoaded(true);
+          setIsLoading(false);
+          setHasError(false);
+          setRetryCount(0); // Reset retry count on successful load
+
+          // Update mute state after successful loading to prevent audio glitches
+          if (videoRef.current) {
+            try {
+              await videoRef.current.setIsMutedAsync(isMuted);
+              console.log(
+                `🔊 ReelCard ${contentId}: Mute state set to ${isMuted} after loading`
+              );
+            } catch (error) {
+              console.error(
+                `❌ ReelCard ${contentId}: Error setting mute state after loading:`,
+                error
+              );
+            }
+          }
+
+          // Start playback if requested
+          if (shouldPlay && videoRef.current) {
+            await videoRef.current.playAsync();
+            setIsPlaying(true);
+            setCurrentlyPlaying(contentId);
           }
         }
-        
-        // Start playback if requested
-        if (shouldPlay && videoRef.current) {
-          await videoRef.current.playAsync();
-          setIsPlaying(true);
-          setCurrentlyPlaying(contentId);
-        }
-      }
-      
-      console.log(`✅ ReelCard ${contentId}: Video loaded successfully`);
-    }, 'loadVideo');
-  }, [contentId, videoUrl, isVideoLoaded, safeVideoOperation, clearLoadingTimeout, autoRetry, setCurrentlyPlaying, isMuted]);
+
+        console.log(`✅ ReelCard ${contentId}: Video loaded successfully`);
+      }, 'loadVideo');
+    },
+    [
+      contentId,
+      videoUrl,
+      isVideoLoaded,
+      safeVideoOperation,
+      clearLoadingTimeout,
+      autoRetry,
+      setCurrentlyPlaying,
+      isMuted,
+    ]
+  );
 
   // Optimized visibility handling - SEPARATED from mute changes
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (isVisible && !hasError) {
         console.log(`🎬 ReelCard ${contentId}: Becoming visible`);
-        
+
+        // Start watch time tracking (only if engagement tracking is enabled)
+        if (!disableEngagementTracking && !hasTrackedEngagement.current) {
+          watchStartTime.current = Date.now();
+          console.log(`⏱️ ReelCard ${contentId}: Started watch timer`);
+        }
+
         if (!isVideoLoaded) {
           // Load and start playing
           await loadVideo(true);
@@ -213,14 +306,17 @@ export function ReelCard({
             setIsPlaying(true);
             setCurrentlyPlaying(contentId);
           }, 'startPlayback');
-          
+
           if (success) {
             console.log(`▶️ ReelCard ${contentId}: Resumed playback`);
           }
         }
       } else if (!isVisible && isVideoLoaded) {
         console.log(`🛑 ReelCard ${contentId}: Becoming invisible`);
-        
+
+        // Track engagement before pausing
+        trackEngagementOnLeave();
+
         // Just pause, don't unload (better for performance and user experience)
         await safeVideoOperation(async () => {
           if (!videoRef.current) {
@@ -228,7 +324,7 @@ export function ReelCard({
           }
           await videoRef.current.pauseAsync();
           setIsPlaying(false);
-          
+
           // Only clear currently playing if this was the current video
           if (isCurrentlyPlaying) {
             setCurrentlyPlaying(null);
@@ -238,22 +334,38 @@ export function ReelCard({
     };
 
     handleVisibilityChange();
-  }, [isVisible, hasError, isVideoLoaded, contentId, loadVideo, safeVideoOperation, setCurrentlyPlaying, isCurrentlyPlaying]);
+  }, [
+    isVisible,
+    hasError,
+    isVideoLoaded,
+    contentId,
+    loadVideo,
+    safeVideoOperation,
+    setCurrentlyPlaying,
+    isCurrentlyPlaying,
+    trackEngagementOnLeave,
+  ]);
 
   // Handle mute state changes WITHOUT affecting video loading
   useEffect(() => {
     if (!isVisible || !isVideoLoaded || !videoRef.current) return;
 
     const updateMuteState = async () => {
-      console.log(`🔊 ReelCard ${contentId}: Updating mute state to ${isMuted}`);
-      
+      console.log(
+        `🔊 ReelCard ${contentId}: Updating mute state to ${isMuted}`
+      );
+
       await safeVideoOperation(async () => {
         if (!videoRef.current) {
-          console.warn(`⚠️ ReelCard ${contentId}: Video ref is null during mute update`);
+          console.warn(
+            `⚠️ ReelCard ${contentId}: Video ref is null during mute update`
+          );
           return;
         }
         await videoRef.current.setIsMutedAsync(isMuted);
-        console.log(`✅ ReelCard ${contentId}: Mute state updated to ${isMuted}`);
+        console.log(
+          `✅ ReelCard ${contentId}: Mute state updated to ${isMuted}`
+        );
       }, 'updateMuteState');
     };
 
@@ -266,14 +378,14 @@ export function ReelCard({
     if (!hasError && !isVideoLoaded) {
       // Preload with a delay to not interfere with current video
       const preloadDelay = isVisible ? 0 : 500; // Load immediately if visible, delay if not
-      
+
       const preloadTimer = setTimeout(() => {
         if (mountedRef.current && !isVideoLoaded && !hasError) {
           console.log(`🔄 ReelCard ${contentId}: Preloading video...`);
           loadVideo(false); // Preload without playing
         }
       }, preloadDelay);
-      
+
       return () => clearTimeout(preloadTimer);
     }
   }, [contentId, hasError, isVideoLoaded, isVisible, loadVideo]);
@@ -282,9 +394,13 @@ export function ReelCard({
   useEffect(() => {
     return () => {
       console.log(`🧹 ReelCard ${contentId}: Component unmounting`);
+
+      // Track engagement before unmounting if needed
+      trackEngagementOnLeave();
+
       mountedRef.current = false;
       clearLoadingTimeout();
-      
+
       // Cleanup video resources
       if (videoRef.current) {
         videoRef.current.unloadAsync().catch((error) => {
@@ -292,44 +408,65 @@ export function ReelCard({
         });
       }
     };
-  }, [contentId, clearLoadingTimeout]);
+  }, [contentId, clearLoadingTimeout, trackEngagementOnLeave]);
 
   // Enhanced playback status handler
-  const handlePlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
-    if (!mountedRef.current) return;
-    
-    playbackStatusRef.current = status;
+  const handlePlaybackStatusUpdate = useCallback(
+    (status: AVPlaybackStatus) => {
+      if (!mountedRef.current) return;
 
-    if (status.isLoaded) {
-      // Update playing state based on actual playback status
-      if (status.isPlaying !== isPlaying) {
-        setIsPlaying(status.isPlaying);
-      }
-      
-      // Handle video completion and looping
-      if (status.didJustFinish && !status.isLooping) {
-        safeVideoOperation(async () => {
-          if (!videoRef.current) {
-            throw new Error('Video ref is null during replay');
+      playbackStatusRef.current = status;
+
+      if (status.isLoaded) {
+        // Update playing state based on actual playback status
+        if (status.isPlaying !== isPlaying) {
+          setIsPlaying(status.isPlaying);
+        }
+
+        // Handle video completion and looping
+        if (status.didJustFinish && !status.isLooping) {
+          // Track as engaged if user watched to completion (only if engagement tracking is enabled)
+          if (
+            !disableEngagementTracking &&
+            !hasTrackedEngagement.current &&
+            watchStartTime.current
+          ) {
+            console.log(
+              `🎯 ReelCard ${contentId}: Video completed - tracking as engaged`
+            );
+            hasTrackedEngagement.current = true;
+            onEngagementTracked?.(contentId, 'engaged', 2);
           }
-          await videoRef.current.replayAsync();
-        }, 'replayVideo');
-      }
-      
-      // Detect corrupted/invalid videos
-      if (status.durationMillis && status.durationMillis < 100) {
-        console.warn(`⚠️ ReelCard ${contentId}: Video might be corrupted (duration: ${status.durationMillis}ms)`);
+
+          safeVideoOperation(async () => {
+            if (!videoRef.current) {
+              throw new Error('Video ref is null during replay');
+            }
+            await videoRef.current.replayAsync();
+          }, 'replayVideo');
+        }
+
+        // Detect corrupted/invalid videos
+        if (status.durationMillis && status.durationMillis < 100) {
+          console.warn(
+            `⚠️ ReelCard ${contentId}: Video might be corrupted (duration: ${status.durationMillis}ms)`
+          );
+          setHasError(true);
+          setIsLoading(false);
+          autoRetry();
+        }
+      } else if (status.error) {
+        console.error(
+          `❌ ReelCard ${contentId}: Playback error:`,
+          status.error
+        );
         setHasError(true);
         setIsLoading(false);
         autoRetry();
       }
-    } else if (status.error) {
-      console.error(`❌ ReelCard ${contentId}: Playback error:`, status.error);
-      setHasError(true);
-      setIsLoading(false);
-      autoRetry();
-    }
-  }, [contentId, isPlaying, safeVideoOperation, autoRetry]);
+    },
+    [contentId, isPlaying, safeVideoOperation, autoRetry]
+  );
 
   const handleVideoLoad = useCallback(() => {
     if (!mountedRef.current) return;
@@ -342,21 +479,24 @@ export function ReelCard({
     onLoad?.();
   }, [contentId, clearLoadingTimeout, onLoad]);
 
-  const handleVideoError = useCallback((error: any) => {
-    if (!mountedRef.current) return;
-    console.error(`❌ ReelCard ${contentId}: Video load error:`, error);
-    console.error(`❌ ReelCard ${contentId}: Video URL:`, videoUrl);
-    clearLoadingTimeout();
-    setIsLoading(false);
-    setHasError(true);
-    setIsVideoLoaded(false);
-    onError?.(error.message || 'Failed to load video');
-    autoRetry();
-  }, [contentId, videoUrl, clearLoadingTimeout, onError, autoRetry]);
+  const handleVideoError = useCallback(
+    (error: any) => {
+      if (!mountedRef.current) return;
+      console.error(`❌ ReelCard ${contentId}: Video load error:`, error);
+      console.error(`❌ ReelCard ${contentId}: Video URL:`, videoUrl);
+      clearLoadingTimeout();
+      setIsLoading(false);
+      setHasError(true);
+      setIsVideoLoaded(false);
+      onError?.(error.message || 'Failed to load video');
+      autoRetry();
+    },
+    [contentId, videoUrl, clearLoadingTimeout, onError, autoRetry]
+  );
 
   const togglePlayPause = useCallback(async () => {
     if (!isVideoLoaded) return;
-    
+
     await safeVideoOperation(async () => {
       if (!videoRef.current) {
         throw new Error('Video ref is null during toggle play/pause');
@@ -368,7 +508,13 @@ export function ReelCard({
         setCurrentlyPlaying(contentId);
       }
     }, 'togglePlayPause');
-  }, [isVideoLoaded, isPlaying, contentId, safeVideoOperation, setCurrentlyPlaying]);
+  }, [
+    isVideoLoaded,
+    isPlaying,
+    contentId,
+    safeVideoOperation,
+    setCurrentlyPlaying,
+  ]);
 
   const handleManualRetry = useCallback(() => {
     console.log(`🔄 ReelCard ${contentId}: Manual retry requested`);
@@ -391,9 +537,9 @@ export function ReelCard({
         <Ionicons name="videocam-off" size={48} color="#666" />
         <Text style={styles.errorText}>Video unavailable</Text>
         <Text style={styles.errorSubtext}>{title}</Text>
-        
+
         {retryCount < 3 ? (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.retryButton}
             onPress={handleManualRetry}
           >
@@ -401,13 +547,13 @@ export function ReelCard({
           </TouchableOpacity>
         ) : (
           <View style={styles.errorActions}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.retryButton}
               onPress={handleManualRetry}
             >
               <Text style={styles.retryText}>Try again</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.dismissButton}
               onPress={handleDismissError}
             >
@@ -484,11 +630,9 @@ export function ReelCard({
       {__DEV__ && (
         <View style={styles.debugInfo}>
           <Text style={styles.debugText}>
-            Visible: {isVisible ? 'YES' : 'NO'} | 
-            Muted: {isMuted ? 'YES' : 'NO'} | 
-            Playing: {isPlaying ? 'YES' : 'NO'} |
-            Loaded: {isVideoLoaded ? 'YES' : 'NO'} |
-            Retries: {retryCount}
+            Visible: {isVisible ? 'YES' : 'NO'} | Muted:{' '}
+            {isMuted ? 'YES' : 'NO'} | Playing: {isPlaying ? 'YES' : 'NO'} |
+            Loaded: {isVideoLoaded ? 'YES' : 'NO'} | Retries: {retryCount}
           </Text>
         </View>
       )}
@@ -617,4 +761,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'SF-Pro-Display',
   },
-}); 
+});
