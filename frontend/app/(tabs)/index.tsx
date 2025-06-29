@@ -40,7 +40,7 @@ const getFactCards = (fact: Fact) => {
       isHookCard: true,
       sourceUrl: undefined,
     },
-    ...fact.fullContent
+    ...fact.summary
       .split('.')
       .filter(Boolean)
       .map((sentence: string, idx: number) => ({
@@ -51,14 +51,6 @@ const getFactCards = (fact: Fact) => {
         isHookCard: undefined,
         sourceUrl: undefined,
       })),
-    {
-      key: 'summary',
-      title: 'Summary',
-      body: fact.summary,
-      isSourceCard: false,
-      isHookCard: undefined,
-      sourceUrl: undefined,
-    },
     {
       key: 'source',
       title: 'Source',
