@@ -4,7 +4,7 @@ import logging
 from datetime import datetime
 
 # Import routers
-from .routers import content, interactions, topics, saved, recommendations, auth
+from .routers import content, interactions, topics, saved, recommendations, auth, user
 
 # Import middleware
 from .utils.rate_limiter import rate_limit_middleware
@@ -51,6 +51,7 @@ app.include_router(interactions.router)
 app.include_router(topics.router)
 app.include_router(saved.router)
 app.include_router(recommendations.router)
+app.include_router(user.router)
 
 @app.get("/")
 async def root():

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,8 @@ import { Feather } from '@expo/vector-icons';
 import * as Progress from 'react-native-progress';
 import * as Animatable from 'react-native-animatable';
 import { router } from 'expo-router';
+import { useStreakData } from '../../hooks/useStreakData';
+import { useSavedContent } from '../../contexts/SavedContentContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const STAT_CARD_WIDTH = (SCREEN_WIDTH - 60) / 2;
@@ -68,6 +70,19 @@ export default function ProgressScreen() {
   const isDark = theme === 'dark';
   const [showBadgesModal, setShowBadgesModal] = useState(false);
 
+  // Get real streak data from our streak system
+  const { currentStreak, fetchStreakData } = useStreakData();
+
+  // Get saved content data
+  const { savedContentIds, refreshSavedContent } = useSavedContent();
+  const totalSavedFacts = savedContentIds.size;
+
+  // Fetch data on mount
+  useEffect(() => {
+    fetchStreakData();
+    refreshSavedContent();
+  }, [fetchStreakData, refreshSavedContent]);
+
   const renderBadge = (badge: (typeof MOCK_DATA.badges)[0]) => (
     <TouchableOpacity
       key={badge.id}
@@ -106,33 +121,7 @@ export default function ProgressScreen() {
             </View>
           </View>
 
-          <View style={styles.levelProgress}>
-            <View style={styles.levelHeader}>
-              <Text style={[styles.levelText, { color: Colors.text }]}>
-                Level {MOCK_DATA.level}
-              </Text>
-              <Text style={[styles.xpText, { color: Colors.textSecondary }]}>
-                {MOCK_DATA.totalXP} / {MOCK_DATA.nextLevelXP} XP
-              </Text>
-            </View>
-            <View
-              style={[styles.progressBar, { backgroundColor: Colors.border }]}
-            >
-              <LinearGradient
-                colors={['#10B981', '#4ECDC4']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={[
-                  styles.progressFill,
-                  {
-                    width: `${
-                      (MOCK_DATA.totalXP / MOCK_DATA.nextLevelXP) * 100
-                    }%`,
-                  },
-                ]}
-              />
-            </View>
-          </View>
+
 
           <View style={styles.statsGrid}>
             <TouchableOpacity
@@ -149,7 +138,7 @@ export default function ProgressScreen() {
               >
                 <Text style={styles.statIcon}>🔥</Text>
                 <Text style={[styles.statValue, { color: Colors.text }]}>
-                  {MOCK_DATA.currentStreak}
+                  {currentStreak}
                 </Text>
                 <Text
                   style={[styles.statLabel, { color: Colors.textSecondary }]}
@@ -184,12 +173,12 @@ export default function ProgressScreen() {
                 },
               ]}
             >
-              <Text style={styles.statIcon}>⭐</Text>
+              <Text style={styles.statIcon}>💾</Text>
               <Text style={[styles.statValue, { color: Colors.text }]}>
-                {MOCK_DATA.totalXP}
+                {totalSavedFacts}
               </Text>
               <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
-                Total XP
+                Saved Facts
               </Text>
             </View>
 

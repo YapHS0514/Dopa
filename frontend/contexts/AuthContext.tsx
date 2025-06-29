@@ -9,7 +9,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, username: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   checkOnboardingStatus: () => Promise<boolean>;
@@ -35,7 +35,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
+  const [onboardingCompleted, setOnboardingCompleted] = useState<
+    boolean | null
+  >(null);
 
   useEffect(() => {
     // Initial session fetch
@@ -65,10 +67,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (email: string, password: string, username: string) => {
     try {
       console.log('Attempting to sign up through API...');
-      const response = await apiClient.signUp(email, password);
+      const response = await apiClient.signUp(email, password, username);
       console.log('API signup response:', response);
 
       Alert.alert(
@@ -78,9 +80,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       );
     } catch (error: any) {
       console.error('Signup error:', error);
-      
+
       // If API signup fails but account might exist, try to sign in
-      if (error.message?.includes('already registered') || error.message?.includes('User already registered')) {
+      if (
+        error.message?.includes('already registered') ||
+        error.message?.includes('User already registered')
+      ) {
         Alert.alert(
           'Account Exists',
           'This email is already registered. Please sign in instead.',
@@ -100,7 +105,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Store the onboarding status from the signin response
       setOnboardingCompleted(response.profile.onboarding_completed);
-      console.log('Onboarding status from API:', response.profile.onboarding_completed);
+      console.log(
+        'Onboarding status from API:',
+        response.profile.onboarding_completed
+      );
 
       const { error } = await supabase.auth.signInWithPassword({
         email,
@@ -109,7 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
 
       console.log('Supabase session established');
-      
+
       // Don't manually route here - let the auth layout handle routing based on onboarding status
       // The auth layout will check onboarding status and route to /onboarding or /(tabs) accordingly
     } catch (error: any) {

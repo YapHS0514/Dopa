@@ -10,6 +10,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useIsFocused } from '@react-navigation/native';
 import { Colors } from '../../constants/Colors';
 import { useStore } from '../../lib/store';
 import { Fact } from '../../hooks/useInfiniteContent';
@@ -98,6 +99,9 @@ export default function SavedScreen() {
   const isDark = theme === 'dark';
   const [selectedFact, setSelectedFact] = useState<Fact | null>(null);
 
+  // Navigation focus detection
+  const isFocused = useIsFocused();
+
   // Backend integration state
   const [savedContent, setSavedContent] = useState<Fact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -142,6 +146,17 @@ export default function SavedScreen() {
   useEffect(() => {
     fetchSavedContent();
   }, []);
+
+  // Automatically close modal when navigating away from saved screen
+  useEffect(() => {
+    if (!isFocused && showFullView) {
+      console.log(
+        '📱 SavedScreen: Screen lost focus, closing modal automatically'
+      );
+      setShowFullView(false);
+      setSelectedFact(null);
+    }
+  }, [isFocused, showFullView]);
 
   // Pull to refresh handler
   const handleRefresh = () => {
@@ -250,6 +265,9 @@ export default function SavedScreen() {
           <SavedContentView
             fact={selectedFact}
             onBack={() => {
+              console.log(
+                '📱 SavedScreen: Manually closing modal via back button'
+              );
               setShowFullView(false);
               setSelectedFact(null);
             }}
