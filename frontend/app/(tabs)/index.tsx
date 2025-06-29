@@ -40,7 +40,7 @@ const getFactCards = (fact: Fact) => {
       isHookCard: true,
       sourceUrl: undefined,
     },
-    ...fact.summary
+    ...fact.fullContent
       .split('.')
       .filter(Boolean)
       .map((sentence: string, idx: number) => ({
@@ -51,6 +51,14 @@ const getFactCards = (fact: Fact) => {
         isHookCard: undefined,
         sourceUrl: undefined,
       })),
+    {
+      key: 'summary',
+      title: 'Summary',
+      body: fact.summary,
+      isSourceCard: false,
+      isHookCard: undefined,
+      sourceUrl: undefined,
+    },
     {
       key: 'source',
       title: 'Source',
@@ -143,11 +151,7 @@ const FactCarousel = ({
           const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
           setCardIndex(idx);
 
-<<<<<<< HEAD
-          // Track engagement based on swipe behavior
-=======
           // Engagement tracking logic from 1-549
->>>>>>> 21b1403 (maintained engagement tracking functionality in index.tsx)
           if (idx > 0 && !hasTrackedInterested.current) {
             // User swiped at least once - "INTERESTED"
             console.log(
@@ -270,18 +274,6 @@ export default function IndexScreen() {
 
   // Engagement tracking state from 1-549
   const contentEngagementTracked = useRef<Set<string>>(new Set());
-  const trackEngagement = useCallback(
-    (contentId: string, engagementType: string, value: number) => {
-      contentEngagementTracked.current.add(contentId);
-      trackInteraction(contentId, engagementType, value);
-    },
-    [trackInteraction]
-  );
-
-  // Track content engagement per item
-  const contentEngagementTracked = useRef<Set<string>>(new Set());
-
-  // Enhanced track interaction that also marks content as tracked
   const trackEngagement = useCallback(
     (contentId: string, engagementType: string, value: number) => {
       contentEngagementTracked.current.add(contentId);
