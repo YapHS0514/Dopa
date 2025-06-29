@@ -12,7 +12,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { useStore } from '../../lib/store';
-import { MOCK_FACTS } from '../../constants/MockData';
 import { Fact } from '../../hooks/useInfiniteContent';
 import { TopicTags } from '../../components/TopicTags';
 import { apiClient } from '../../lib/api';
