@@ -16,15 +16,12 @@ async def get_contents(
     topic_id: Optional[str] = None,
     user: User = Depends(get_current_user)
 ):
-    """Get personalized content based on user's topic preferences"""
+    """Get personalized content based on user's topic preferences, excluding already-interacted content"""
     try:
         logger.info(f"Fetching personalized content for auth user {user.id}")
         supabase = get_supabase_client()
         
-        # First, get the user's profile ID from the profiles table
-        logger.info("Getting user's profile ID from profiles table")
-
-        # Step 1: Get user's preferred topics (points > 50) using profile ID
+        # Step 1: Get user's preferred topics (points > 50)
         logger.info("Step 1: Getting user's preferred topics with points > 50")
         prefs_response = supabase.table("user_topic_preferences").select(
             "topic_id, points"
@@ -35,15 +32,44 @@ async def get_contents(
         preferred_topic_ids = [pref["topic_id"] for pref in prefs_response.data] if prefs_response.data else []
         logger.info(f"Preferred topic IDs: {preferred_topic_ids}")
         
-        if not preferred_topic_ids:
-            # If user has no preferences with >50 points, return general content
-            logger.info("No preferred topics found, returning general content")
-            response = supabase.table("contents").select(
-                "id, title, summary, content_type, media_url, source_url, created_at"
-            ).order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+        # Step 2: Get content IDs that user has already interacted with (to exclude them)
+        logger.info("Step 2: Getting content IDs user has already interacted with")
+        interactions_response = supabase.table("user_interactions").select(
+            "content_id"
+        ).eq("user_id", user.id).execute()
+        
+        interacted_content_ids = list(set([
+            interaction["content_id"] for interaction in interactions_response.data
+        ])) if interactions_response.data else []
+        
+        logger.info(f"User has interacted with {len(interacted_content_ids)} pieces of content")
+        
+        # Enhanced logging: Show sample of interacted content IDs for verification
+        if interacted_content_ids:
+            sample_interacted = interacted_content_ids[:5]  # Show first 5 for brevity
+            logger.info(f"📋 Sample interacted content IDs: {sample_interacted}{'...' if len(interacted_content_ids) > 5 else ''}")
         else:
-            # Step 2: Get content IDs linked to preferred topics via content_topics
-            logger.info("Step 2: Getting content IDs for preferred topics")
+            logger.info("📋 No previous interactions found - user will see all available content")
+        
+        if not preferred_topic_ids:
+            # If user has no preferences with >50 points, return general content (excluding interacted)
+            logger.info("No preferred topics found, returning general content (excluding interacted)")
+            if interacted_content_ids:
+                # Use NOT IN to exclude interacted content
+                logger.info(f"🔍 Applying NOT IN filter to exclude {len(interacted_content_ids)} interacted content pieces")
+                response = supabase.table("contents").select(
+                    "id, title, summary, content_type, media_url, source_url, created_at"
+                ).not_.in_("id", interacted_content_ids).order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+                logger.info(f"✅ Filter applied successfully - query excluded {len(interacted_content_ids)} content pieces")
+            else:
+                # No interactions yet, return all content
+                logger.info("🆕 No interactions to filter - returning all available content")
+                response = supabase.table("contents").select(
+                    "id, title, summary, content_type, media_url, source_url, created_at"
+                ).order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+        else:
+            # Step 3: Get content IDs linked to preferred topics via content_topics
+            logger.info("Step 3: Getting content IDs for preferred topics")
             content_topics_response = supabase.table("content_topics").select(
                 "content_id"
             ).in_("topic_id", preferred_topic_ids).execute()
@@ -57,19 +83,82 @@ async def get_contents(
             logger.info(f"Preferred content IDs: {preferred_content_ids}")
             
             if not preferred_content_ids:
-                # If no content found for preferred topics, return general content
-                logger.info("No content found for preferred topics, returning general content")
-                response = supabase.table("contents").select(
-                    "id, title, summary, content_type, media_url, source_url, created_at"
-                ).order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+                # If no content found for preferred topics, return general content (excluding interacted)
+                logger.info("No content found for preferred topics, returning general content (excluding interacted)")
+                if interacted_content_ids:
+                    logger.info(f"🔍 Fallback: Applying NOT IN filter to exclude {len(interacted_content_ids)} interacted content pieces")
+                    response = supabase.table("contents").select(
+                        "id, title, summary, content_type, media_url, source_url, created_at"
+                    ).not_.in_("id", interacted_content_ids).order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+                    logger.info(f"✅ Fallback filter applied successfully")
+                else:
+                    logger.info("🆕 Fallback: No interactions to filter - returning all available content")
+                    response = supabase.table("contents").select(
+                        "id, title, summary, content_type, media_url, source_url, created_at"
+                    ).order("created_at", desc=True).range(offset, offset + limit - 1).execute()
             else:
-                # Step 3: Get the actual content records for preferred content IDs
-                logger.info("Step 3: Getting content records for preferred content IDs")
-                response = supabase.table("contents").select(
-                    "id, title, summary, content_type, media_url, source_url, created_at"
-                ).in_("id", preferred_content_ids).order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+                # Step 4: Filter out interacted content from preferred content
+                logger.info("Step 4: Filtering preferred content to exclude interacted content")
+                
+                # Log the filtering process in detail
+                filtered_out_content = [
+                    content_id for content_id in preferred_content_ids 
+                    if content_id in interacted_content_ids
+                ]
+                logger.info(f"🚫 Filtering out {len(filtered_out_content)} preferred content pieces user has already seen")
+                if filtered_out_content:
+                    sample_filtered = filtered_out_content[:3]
+                    logger.info(f"🚫 Sample filtered content IDs: {sample_filtered}{'...' if len(filtered_out_content) > 3 else ''}")
+                
+                # Remove interacted content from preferred content list
+                fresh_preferred_content_ids = [
+                    content_id for content_id in preferred_content_ids 
+                    if content_id not in interacted_content_ids
+                ]
+                
+                logger.info(f"Fresh preferred content IDs (excluding interacted): {len(fresh_preferred_content_ids)} out of {len(preferred_content_ids)}")
+                
+                if not fresh_preferred_content_ids:
+                    # User has interacted with all preferred content, fall back to general content (excluding interacted)
+                    logger.info("User has interacted with all preferred content, falling back to general content")
+                    if len(interacted_content_ids) < 1000:  # Safety check to prevent excluding too much content
+                        logger.info(f"🔍 Complete fallback: Applying NOT IN filter to exclude {len(interacted_content_ids)} interacted content pieces")
+                        response = supabase.table("contents").select(
+                            "id, title, summary, content_type, media_url, source_url, created_at"
+                        ).not_.in_("id", interacted_content_ids).order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+                        logger.info(f"✅ Complete fallback filter applied successfully")
+                    else:
+                        # If user has interacted with too much content, just return latest content
+                        logger.warning("User has interacted with too much content, returning latest content without filtering")
+                        logger.warning(f"⚠️ FILTERING DISABLED - user has {len(interacted_content_ids)} interactions (>1000 limit)")
+                        response = supabase.table("contents").select(
+                            "id, title, summary, content_type, media_url, source_url, created_at"
+                        ).order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+                else:
+                    # Get fresh preferred content
+                    logger.info(f"✅ Serving {len(fresh_preferred_content_ids)} fresh preferred content pieces")
+                    if fresh_preferred_content_ids:
+                        sample_fresh = fresh_preferred_content_ids[:3]
+                        logger.info(f"📋 Sample fresh content IDs: {sample_fresh}{'...' if len(fresh_preferred_content_ids) > 3 else ''}")
+                    response = supabase.table("contents").select(
+                        "id, title, summary, content_type, media_url, source_url, created_at"
+                    ).in_("id", fresh_preferred_content_ids).order("created_at", desc=True).range(offset, offset + limit - 1).execute()
         
         logger.info(f"Final content response: {response.data}")
+        
+        # 🔍 VERIFICATION: Check that returned content doesn't contain any interacted content
+        returned_content_ids = [content["id"] for content in response.data] if response.data else []
+        logger.info(f"📋 Returned content IDs: {returned_content_ids}")
+        
+        # Verify no overlap between returned and interacted content
+        overlap = set(returned_content_ids) & set(interacted_content_ids)
+        if overlap:
+            logger.error(f"❌ FILTERING FAILED! Found overlap between returned and interacted content: {list(overlap)}")
+            logger.error(f"❌ This indicates the NOT IN filtering is not working properly!")
+        else:
+            logger.info(f"✅ FILTERING VERIFIED! No overlap between returned ({len(returned_content_ids)}) and interacted ({len(interacted_content_ids)}) content")
+            if returned_content_ids and interacted_content_ids:
+                logger.info(f"✅ Filtering effectiveness: Successfully excluded {len(interacted_content_ids)} pieces, served {len(returned_content_ids)} fresh pieces")
         
         # Transform the data to match the expected frontend format
         transformed_data = []

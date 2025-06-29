@@ -123,10 +123,23 @@ const FactCarousel = ({ fact }: { fact: Fact }) => {
           setCardIndex(idx);
         }}
       />
-      {/* Action buttons positioned on the right side */}
+      {/* Action buttons positioned on the right side - only like/unlike and save/unsave allowed */}
       <ActionButtons
         fact={{ ...fact, contentType: 'text' as const }}
         style={styles.actionButtons}
+        onInteractionTracked={(contentId, interactionType, value) => {
+          // Only track unlike/unsave interactions for saved content
+          if (interactionType === 'like' || interactionType === 'save') {
+            console.log(
+              `📱 SavedContentView: ${interactionType} interaction tracked for saved content ${contentId} with value ${value}`
+            );
+            // Note: Could be tracked to backend here if needed
+          } else {
+            console.log(
+              `📱 SavedContentView: Skipped ${interactionType} tracking for saved content - not applicable`
+            );
+          }
+        }}
       />
     </View>
   );
@@ -152,9 +165,26 @@ const ReelContent = ({ fact }: { fact: Fact }) => {
         onError={(error: string) =>
           console.error(`Saved reel error for ${fact.id}:`, error)
         }
+        disableEngagementTracking={true} // No watch time tracking for saved content
       />
-      {/* Action buttons for reels */}
-      <ActionButtons fact={reelFact} style={styles.reelActionButtons} />
+      {/* Action buttons for reels - only like/unlike and save/unsave allowed */}
+      <ActionButtons
+        fact={reelFact}
+        style={styles.reelActionButtons}
+        onInteractionTracked={(contentId, interactionType, value) => {
+          // Only track unlike/unsave interactions for saved content
+          if (interactionType === 'like' || interactionType === 'save') {
+            console.log(
+              `📱 SavedContentView: ${interactionType} interaction tracked for saved reel ${contentId} with value ${value}`
+            );
+            // Note: Could be tracked to backend here if needed
+          } else {
+            console.log(
+              `📱 SavedContentView: Skipped ${interactionType} tracking for saved content - not applicable`
+            );
+          }
+        }}
+      />
     </View>
   );
 };
@@ -165,6 +195,13 @@ export default function SavedContentView({
 }: SavedContentViewProps) {
   const contentType = getContentType(fact);
   const { pauseAllVideos } = useReelAudioStore();
+
+  // Log that engagement tracking is disabled for saved content
+  useEffect(() => {
+    console.log(
+      `📱 SavedContentView: Viewing saved ${contentType} content ${fact.id} - engagement tracking disabled`
+    );
+  }, [contentType, fact.id]);
 
   // Cleanup when component unmounts - pause any playing videos
   useEffect(() => {

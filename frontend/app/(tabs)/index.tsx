@@ -71,9 +71,23 @@ const getFactCards = (fact: Fact) => {
   return cards;
 };
 
-const FactCarousel = ({ fact }: { fact: Fact }) => {
+const FactCarousel = ({
+  fact,
+  onEngagementTracked,
+  contentEngagementTracked,
+}: {
+  fact: Fact;
+  onEngagementTracked?: (
+    contentId: string,
+    engagementType: string,
+    value: number
+  ) => void;
+  contentEngagementTracked?: React.MutableRefObject<Set<string>>;
+}) => {
   const cards = getFactCards(fact);
   const [cardIndex, setCardIndex] = useState(0);
+  const hasTrackedInterested = useRef(false);
+  const hasTrackedEngaged = useRef(false);
 
   return (
     <View style={{ flex: 1 }}>
@@ -120,12 +134,35 @@ const FactCarousel = ({ fact }: { fact: Fact }) => {
         onMomentumScrollEnd={(e) => {
           const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
           setCardIndex(idx);
+
+          // Track engagement based on swipe behavior
+          if (idx > 0 && !hasTrackedInterested.current) {
+            // User swiped at least once - "INTERESTED"
+            console.log(
+              `📖 TextContent ${fact.id}: Swiped to card ${idx} - tracking as interested`
+            );
+            hasTrackedInterested.current = true;
+            contentEngagementTracked?.current.add(fact.id);
+            onEngagementTracked?.(fact.id, 'interested', 1);
+          }
+
+          // Check if user reached the source card (last card) - "ENGAGED"
+          const isSourceCard = cards[idx]?.isSourceCard;
+          if (isSourceCard && !hasTrackedEngaged.current) {
+            console.log(
+              `📖 TextContent ${fact.id}: Reached source card - tracking as engaged`
+            );
+            hasTrackedEngaged.current = true;
+            contentEngagementTracked?.current.add(fact.id);
+            onEngagementTracked?.(fact.id, 'engaged', 2);
+          }
         }}
       />
       {/* Action buttons positioned on the right side */}
       <ActionButtons
         fact={{ ...fact, contentType: 'text' as const }}
         style={styles.actionButtons}
+        onInteractionTracked={onEngagementTracked}
       />
     </View>
   );
@@ -136,10 +173,16 @@ const ReelContent = ({
   fact,
   isVisible,
   screenFocused,
+  onEngagementTracked,
 }: {
   fact: Fact;
   isVisible: boolean;
   screenFocused: boolean;
+  onEngagementTracked?: (
+    contentId: string,
+    engagementType: string,
+    value: number
+  ) => void;
 }) => {
   // Ensure the fact object has the correct contentType for ActionButtons
   const reelFact = {
@@ -160,9 +203,14 @@ const ReelContent = ({
         onError={(error: string) =>
           console.error(`Reel error for ${fact.id}:`, error)
         }
+        onEngagementTracked={onEngagementTracked}
       />
       {/* Action buttons for reels with correct contentType */}
-      <ActionButtons fact={reelFact} style={styles.reelActionButtons} />
+      <ActionButtons
+        fact={reelFact}
+        style={styles.reelActionButtons}
+        onInteractionTracked={onEngagementTracked}
+      />
     </View>
   );
 };
@@ -171,7 +219,7 @@ export default function IndexScreen() {
   const [factIndex, setFactIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const lastTrackedContentId = useRef<string | null>(null);
-  
+
   // Navigation focus detection
   const isFocused = useIsFocused();
   const { pauseAllVideos } = useReelAudioStore();
@@ -186,7 +234,7 @@ export default function IndexScreen() {
     isInitialized,
     trackInteraction,
   } = useInfiniteContent();
-  
+
   // Pause all videos when screen loses focus
   useEffect(() => {
     if (!isFocused) {
@@ -199,6 +247,18 @@ export default function IndexScreen() {
 
   // StreakButton now handles its own data fetching
 
+  // Track content engagement per item
+  const contentEngagementTracked = useRef<Set<string>>(new Set());
+
+  // Enhanced track interaction that also marks content as tracked
+  const trackEngagement = useCallback(
+    (contentId: string, engagementType: string, value: number) => {
+      contentEngagementTracked.current.add(contentId);
+      trackInteraction(contentId, engagementType, value);
+    },
+    [trackInteraction]
+  );
+
   // Handle scroll events for infinite loading
   const handleScroll = useCallback(
     (event: any) => {
@@ -210,17 +270,27 @@ export default function IndexScreen() {
         console.log(`Scroll: moved to item ${currentIndex}/${facts.length}`);
       }
 
-      // Track view when user switches to a new fact
-      if (currentIndex !== factIndex && facts[currentIndex]) {
-        const currentContentId = facts[currentIndex].id;
+      // Handle engagement tracking when leaving content
+      if (currentIndex !== factIndex && facts[factIndex]) {
+        const previousContent = facts[factIndex];
+        const contentType = getContentType(previousContent);
 
-        // Only track if we haven't already tracked this content
-        if (lastTrackedContentId.current !== currentContentId) {
-          setFactIndex(currentIndex);
-          lastTrackedContentId.current = currentContentId;
-          // Track content view
-          trackInteraction(currentContentId, 'view', 1);
+        // For text content, check if user skipped without swiping
+        if (
+          contentType === 'text' &&
+          !contentEngagementTracked.current.has(previousContent.id)
+        ) {
+          console.log(
+            `📖 TextContent ${previousContent.id}: Left without swiping - tracking as skip`
+          );
+          trackInteraction(previousContent.id, 'skip', -2);
+          contentEngagementTracked.current.add(previousContent.id);
         }
+      }
+
+      // Update current index (engagement tracking is handled by individual components)
+      if (currentIndex !== factIndex) {
+        setFactIndex(currentIndex);
       }
 
       // More aggressive loading: load when at 2nd item from end OR when at 3rd item
@@ -260,12 +330,25 @@ export default function IndexScreen() {
       const isVisible = index === factIndex;
 
       if (contentType === 'reel') {
-        return <ReelContent fact={item} isVisible={isVisible} screenFocused={isFocused} />;
+        return (
+          <ReelContent
+            fact={item}
+            isVisible={isVisible}
+            screenFocused={isFocused}
+            onEngagementTracked={trackEngagement}
+          />
+        );
       } else {
-        return <FactCarousel fact={item} />;
+        return (
+          <FactCarousel
+            fact={item}
+            onEngagementTracked={trackEngagement}
+            contentEngagementTracked={contentEngagementTracked}
+          />
+        );
       }
     },
-    [factIndex, isFocused]
+    [factIndex, isFocused, trackEngagement]
   );
 
   const keyExtractor = useCallback((item: Fact) => item.id, []);

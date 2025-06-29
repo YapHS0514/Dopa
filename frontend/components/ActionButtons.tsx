@@ -17,9 +17,18 @@ import { useReelAudioStore } from '../lib/store';
 interface ActionButtonsProps {
   fact?: any; // TODO: Replace with proper Fact type from backend
   style?: any;
+  onInteractionTracked?: (
+    contentId: string,
+    interactionType: string,
+    value: number
+  ) => void;
 }
 
-export default function ActionButtons({ fact, style }: ActionButtonsProps) {
+export default function ActionButtons({
+  fact,
+  style,
+  onInteractionTracked,
+}: ActionButtonsProps) {
   const [liked, setLiked] = useState(false);
   const [listening, setListening] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
@@ -72,9 +81,17 @@ export default function ActionButtons({ fact, style }: ActionButtonsProps) {
 
   const handleLike = () => {
     animatePress(likeAnim);
-    setLiked((l) => !l);
-    // TODO: Send like status to backend API
-    // Example: await api.likeFact(fact.id, !liked)
+    const newLikedState = !liked;
+    setLiked(newLikedState);
+
+    // Track like interaction
+    if (fact?.id && newLikedState) {
+      console.log(`❤️ ActionButtons: Like tracked for ${fact.id}`);
+      onInteractionTracked?.(fact.id, 'like', 10); // +10 points for like
+    }
+
+    // TODO: Send like status to backend API for persistence
+    // Example: await api.likeFact(fact.id, newLikedState)
   };
 
   const [isSavingContent, setIsSavingContent] = useState(false);
@@ -116,6 +133,10 @@ export default function ActionButtons({ fact, style }: ActionButtonsProps) {
 
         // Log the extracted saved ID for debugging
         console.log(`Extracted saved ID: ${savedId}`);
+
+        // Track save interaction
+        console.log(`💾 ActionButtons: Save tracked for ${fact.id}`);
+        onInteractionTracked?.(fact.id, 'save', 5); // +5 points for save
       } else {
         // Unsave the content - now we can do this efficiently!
         console.log('Unsaving content:', fact.id);
