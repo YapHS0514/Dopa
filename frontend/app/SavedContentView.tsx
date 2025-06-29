@@ -18,7 +18,7 @@ import ActionButtons from '../components/ActionButtons';
 import { Fact } from '../hooks/useInfiniteContent';
 import { ReelCard } from '../components/ReelCard';
 import { Ionicons } from '@expo/vector-icons';
-import { useReelAudioStore } from '../lib/store';
+import { useReelAudioStore, useTTSAudioStore } from '../lib/store';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -195,6 +195,7 @@ export default function SavedContentView({
 }: SavedContentViewProps) {
   const contentType = getContentType(fact);
   const { pauseAllVideos } = useReelAudioStore();
+  const { pauseAllAudio: pauseAllTTS } = useTTSAudioStore();
 
   // Log that engagement tracking is disabled for saved content
   useEffect(() => {
@@ -203,20 +204,26 @@ export default function SavedContentView({
     );
   }, [contentType, fact.id]);
 
-  // Cleanup when component unmounts - pause any playing videos
+  // Cleanup when component unmounts - pause any playing videos and TTS
   useEffect(() => {
     return () => {
-      console.log('🧹 SavedContentView: Component unmounting, pausing videos');
+      console.log(
+        '🧹 SavedContentView: Component unmounting, pausing videos and TTS'
+      );
       pauseAllVideos();
+      pauseAllTTS();
     };
-  }, [pauseAllVideos]);
+  }, [pauseAllVideos, pauseAllTTS]);
 
-  // Enhanced back handler that also pauses videos
+  // Enhanced back handler that also pauses videos and TTS
   const handleBack = useCallback(() => {
-    console.log('🔙 SavedContentView: Back button pressed, pausing videos');
+    console.log(
+      '🔙 SavedContentView: Back button pressed, pausing videos and TTS'
+    );
     pauseAllVideos();
+    pauseAllTTS();
     onBack();
-  }, [pauseAllVideos, onBack]);
+  }, [pauseAllVideos, pauseAllTTS, onBack]);
 
   return (
     <SafeAreaView style={styles.root}>

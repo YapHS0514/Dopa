@@ -49,10 +49,12 @@ interface ReelAudioState {
   currentlyPlayingId: string | null;
   // Track video refs for proper cleanup
   videoRefs: { [contentId: string]: any };
+  allReelsMuted: boolean;
   
   // User actions
   setManualMute: (contentId: string, isMuted: boolean) => void;
   toggleMute: (contentId: string) => boolean;
+  toggleAllReelsMute: () => void;
   
   // State queries
   isManuallyMuted: (contentId: string) => boolean;
@@ -71,6 +73,7 @@ export const useReelAudioStore = create<ReelAudioState>((set, get) => ({
   manualMutePreferences: {},
   currentlyPlayingId: null,
   videoRefs: {},
+  allReelsMuted: false,
   
   setManualMute: (contentId: string, isMuted: boolean) => {
     set((state) => ({
@@ -169,5 +172,80 @@ export const useReelAudioStore = create<ReelAudioState>((set, get) => ({
     // Clear currently playing
     set({ currentlyPlayingId: null });
     console.log(`✅ Store: All videos paused`);
+  },
+  
+  toggleAllReelsMute: () => {
+    set((state) => ({ allReelsMuted: !state.allReelsMuted }));
+    console.log('🔊 Store: Toggled all reels mute');
+  },
+}));
+
+// TTS Audio Store for managing text-to-speech playback
+interface TTSAudioState {
+  currentlyPlayingId: string | null;
+  audioRef: any | null;
+  isLoading: boolean;
+  
+  // Actions
+  setCurrentlyPlaying: (contentId: string | null) => void;
+  getCurrentlyPlaying: () => string | null;
+  setAudioRef: (ref: any | null) => void;
+  setLoading: (loading: boolean) => void;
+  stopCurrentAudio: () => Promise<void>;
+  pauseAllAudio: () => Promise<void>;
+}
+
+export const useTTSAudioStore = create<TTSAudioState>((set, get) => ({
+  currentlyPlayingId: null,
+  audioRef: null,
+  isLoading: false,
+  
+  setCurrentlyPlaying: (contentId: string | null) => {
+    set({ currentlyPlayingId: contentId });
+    console.log(`🔊 TTS Store: Currently playing ${contentId}`);
+  },
+  
+  getCurrentlyPlaying: () => get().currentlyPlayingId,
+  
+  setAudioRef: (ref: any | null) => {
+    set({ audioRef: ref });
+    console.log(`🔊 TTS Store: Audio ref ${ref ? 'set' : 'cleared'}`);
+  },
+  
+  setLoading: (loading: boolean) => {
+    set({ isLoading: loading });
+    console.log(`🔊 TTS Store: Loading state ${loading}`);
+  },
+  
+  stopCurrentAudio: async () => {
+    const state = get();
+    if (state.audioRef) {
+      try {
+        await state.audioRef.stopAsync();
+        await state.audioRef.unloadAsync();
+        console.log(`🔊 TTS Store: Stopped current audio`);
+      } catch (error) {
+        console.error(`❌ TTS Store: Error stopping audio:`, error);
+      }
+    }
+    set({ currentlyPlayingId: null, audioRef: null });
+  },
+  
+  pauseAllAudio: async () => {
+    const state = get();
+    console.log(`🔊 TTS Store: Pausing all TTS audio`);
+    
+    if (state.audioRef) {
+      try {
+        await state.audioRef.stopAsync();
+        await state.audioRef.unloadAsync();
+        console.log(`✅ TTS Store: Stopped TTS audio`);
+      } catch (error) {
+        console.error(`❌ TTS Store: Error stopping TTS audio:`, error);
+      }
+    }
+    
+    set({ currentlyPlayingId: null, audioRef: null });
+    console.log(`✅ TTS Store: All TTS audio paused`);
   },
 })); 

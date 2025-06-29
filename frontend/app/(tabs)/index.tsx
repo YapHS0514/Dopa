@@ -22,7 +22,7 @@ import StreakButton from '../../components/StreakButton';
 import { useInfiniteContent, Fact } from '../../hooks/useInfiniteContent';
 import { apiClient } from '../../lib/api';
 import { ReelCard } from '../../components/ReelCard';
-import { useReelAudioStore } from '../../lib/store';
+import { useReelAudioStore, useTTSAudioStore } from '../../lib/store';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -65,17 +65,15 @@ const getFactCards = (fact: Fact) => {
 
 const FactCarousel = ({
   fact,
-  onEngagementTracked,
-  contentEngagementTracked,
-}: {
-  fact: Fact;
-  onEngagementTracked?: (
-    contentId: string,
-    engagementType: string,
-    value: number
-  ) => void;
-  contentEngagementTracked?: React.MutableRefObject<Set<string>>;
-}) => {
+  isPlaying,
+  onListen,
+  onLike,
+  onShare,
+  onSave,
+  liked,
+  saved,
+  listenLoading,
+}: any) => {
   const cards = getFactCards(fact);
   const [cardIndex, setCardIndex] = useState(0);
   const hasTrackedInterested = useRef(false);
@@ -113,7 +111,7 @@ const FactCarousel = ({
                 isSourceCard={item.isSourceCard}
                 isHookCard={item.isHookCard}
                 sourceUrl={item.sourceUrl}
-                tags={item.isHookCard ? fact.tags : undefined} // Show tags only on hook card
+                tags={item.isHookCard ? fact.tags : undefined}
                 onSourcePress={
                   item.isSourceCard && item.sourceUrl
                     ? () => Linking.openURL(item.sourceUrl)
@@ -150,12 +148,8 @@ const FactCarousel = ({
           }
         }}
       />
-      {/* Action buttons positioned on the right side */}
-      <ActionButtons
-        fact={{ ...fact, contentType: 'text' as const }}
-        style={styles.actionButtons}
-        onInteractionTracked={onEngagementTracked}
-      />
+      {/* Unified right-hand side buttons */}
+      <ActionButtons fact={fact} style={styles.actionButtons} />
     </View>
   );
 };
@@ -165,18 +159,28 @@ const ReelContent = ({
   fact,
   isVisible,
   screenFocused,
-  onEngagementTracked,
+  isPlaying,
+  isMuted,
+  onListen,
+  onLike,
+  onShare,
+  onSave,
+  liked,
+  saved,
 }: {
   fact: Fact;
   isVisible: boolean;
   screenFocused: boolean;
-  onEngagementTracked?: (
-    contentId: string,
-    engagementType: string,
-    value: number
-  ) => void;
+  isPlaying: boolean;
+  isMuted: boolean;
+  onListen: () => void;
+  onLike: () => void;
+  onShare: () => void;
+  onSave: () => void;
+  liked: boolean;
+  saved: boolean;
 }) => {
-  // Ensure the fact object has the correct contentType for ActionButtons
+  // Ensure the fact object has the correct contentType for PostActions
   const reelFact = {
     ...fact,
     contentType: 'reel' as const,
@@ -188,7 +192,7 @@ const ReelContent = ({
         videoUrl={fact.video_url!}
         title={fact.hook}
         tags={fact.tags}
-        isVisible={isVisible && screenFocused} // Only visible if both conditions are true
+        isVisible={isVisible && screenFocused}
         contentId={fact.id}
         onLoadStart={() => console.log(`Loading reel: ${fact.id}`)}
         onLoad={() => console.log(`Reel loaded: ${fact.id}`)}
@@ -197,12 +201,8 @@ const ReelContent = ({
         }
         onEngagementTracked={onEngagementTracked}
       />
-      {/* Action buttons for reels with correct contentType */}
-      <ActionButtons
-        fact={reelFact}
-        style={styles.reelActionButtons}
-        onInteractionTracked={onEngagementTracked}
-      />
+      {/* Unified right-hand side buttons */}
+      <ActionButtons fact={reelFact} style={styles.actionButtons} />
     </View>
   );
 };
@@ -215,6 +215,7 @@ export default function IndexScreen() {
   // Navigation focus detection
   const isFocused = useIsFocused();
   const { pauseAllVideos } = useReelAudioStore();
+  const { pauseAllAudio: pauseAllTTS, currentlyPlayingId } = useTTSAudioStore();
 
   // Use the new infinite content hook
   const {
@@ -230,12 +231,15 @@ export default function IndexScreen() {
   // Pause all videos when screen loses focus
   useEffect(() => {
     if (!isFocused) {
-      console.log('📱 IndexScreen: Screen lost focus, pausing all videos');
+      console.log(
+        '📱 IndexScreen: Screen lost focus, pausing all videos and TTS'
+      );
       pauseAllVideos();
+      pauseAllTTS();
     } else {
       console.log('📱 IndexScreen: Screen gained focus');
     }
-  }, [isFocused, pauseAllVideos]);
+  }, [isFocused, pauseAllVideos, pauseAllTTS]);
 
   // StreakButton now handles its own data fetching
 
@@ -262,27 +266,21 @@ export default function IndexScreen() {
         console.log(`Scroll: moved to item ${currentIndex}/${facts.length}`);
       }
 
-      // Handle engagement tracking when leaving content
-      if (currentIndex !== factIndex && facts[factIndex]) {
-        const previousContent = facts[factIndex];
-        const contentType = getContentType(previousContent);
+      // Track view when user switches to a new fact
+      if (currentIndex !== factIndex && facts[currentIndex]) {
+        const currentContentId = facts[currentIndex].id;
 
-        // For text content, check if user skipped without swiping
-        if (
-          contentType === 'text' &&
-          !contentEngagementTracked.current.has(previousContent.id)
-        ) {
-          console.log(
-            `📖 TextContent ${previousContent.id}: Left without swiping - tracking as skip`
-          );
-          trackInteraction(previousContent.id, 'skip', -2);
-          contentEngagementTracked.current.add(previousContent.id);
+        // Only track if we haven't already tracked this content
+        if (lastTrackedContentId.current !== currentContentId) {
+          setFactIndex(currentIndex);
+          lastTrackedContentId.current = currentContentId;
+
+          // Stop any currently playing TTS when switching content
+          pauseAllTTS();
+
+          // Track content view
+          trackInteraction(currentContentId, 'view', 1);
         }
-      }
-
-      // Update current index (engagement tracking is handled by individual components)
-      if (currentIndex !== factIndex) {
-        setFactIndex(currentIndex);
       }
 
       // More aggressive loading: load when at 2nd item from end OR when at 3rd item
@@ -297,7 +295,15 @@ export default function IndexScreen() {
         loadMoreContent();
       }
     },
-    [facts, factIndex, loadMoreContent, hasMore, loading, trackInteraction]
+    [
+      facts,
+      factIndex,
+      loadMoreContent,
+      hasMore,
+      loading,
+      trackInteraction,
+      pauseAllTTS,
+    ]
   );
 
   // Separate handler for momentum scroll end (when user stops swiping)
@@ -320,6 +326,10 @@ export default function IndexScreen() {
     ({ item, index }: { item: Fact; index: number }) => {
       const contentType = getContentType(item);
       const isVisible = index === factIndex;
+      let isMuted = false;
+      if (contentType === 'reel') {
+        isMuted = useReelAudioStore.getState().isManuallyMuted(item.id);
+      }
 
       if (contentType === 'reel') {
         return (
@@ -327,20 +337,33 @@ export default function IndexScreen() {
             fact={item}
             isVisible={isVisible}
             screenFocused={isFocused}
-            onEngagementTracked={trackEngagement}
+            isPlaying={isVisible && !isMuted}
+            isMuted={isMuted}
+            onListen={() => {}}
+            onLike={() => {}}
+            onShare={() => {}}
+            onSave={() => {}}
+            liked={false}
+            saved={false}
           />
         );
       } else {
         return (
           <FactCarousel
             fact={item}
-            onEngagementTracked={trackEngagement}
-            contentEngagementTracked={contentEngagementTracked}
+            isPlaying={currentlyPlayingId === item.id}
+            onListen={() => {}}
+            onLike={() => {}}
+            onShare={() => {}}
+            onSave={() => {}}
+            liked={false}
+            saved={false}
+            listenLoading={false}
           />
         );
       }
     },
-    [factIndex, isFocused, trackEngagement]
+    [factIndex, isFocused, currentlyPlayingId]
   );
 
   const keyExtractor = useCallback((item: Fact) => item.id, []);

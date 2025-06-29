@@ -66,9 +66,15 @@ export function ReelCard({
     shouldBeMuted,
     setCurrentlyPlaying,
     registerVideoRef,
+  const {
+    shouldBeMuted,
+    setCurrentlyPlaying,
+    registerVideoRef,
     unregisterVideoRef,
     getCurrentlyPlaying,
+    allReelsMuted,
   } = useReelAudioStore();
+
 
   const isMuted = shouldBeMuted(contentId, isVisible);
   const isCurrentlyPlaying = getCurrentlyPlaying() === contentId;
@@ -530,6 +536,12 @@ export function ReelCard({
     // This could trigger a callback to parent to skip this video
     onError?.('Video dismissed by user');
   }, [contentId, onError]);
+
+  useEffect(() => {
+    if (videoRef.current && isVisible) {
+      videoRef.current.setIsMutedAsync(allReelsMuted);
+    }
+  }, [allReelsMuted, isVisible]);
 
   if (hasError && !autoRetrying) {
     return (
