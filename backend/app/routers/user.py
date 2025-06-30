@@ -431,4 +431,16 @@ async def update_daily_streak(user: User = Depends(get_current_user)):
         
     except Exception as e:
         logger.error(f"Error updating daily streak: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/total_facts")
+async def get_total_facts(user: User = Depends(get_current_user)):
+    """Get the total number of facts the user has seen (view interactions)."""
+    try:
+        supabase = get_supabase_client()
+        response = supabase.table("user_interactions").select("*", count="exact").eq("user_id", user.id).eq("interaction_type", "view").execute()
+        total_facts = response.count or 0
+        return {"total_facts": total_facts}
+    except Exception as e:
+        logger.error(f"Error fetching total facts for user {user.id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) 

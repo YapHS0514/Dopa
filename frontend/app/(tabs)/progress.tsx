@@ -59,6 +59,7 @@ export default function ProgressScreen() {
   // Get session data
   const { session } = useAuth();
   const [userBadges, setUserBadges] = useState<any[]>([]);
+  const totalFacts = 4;
 
   // Fetch data on mount
   useEffect(() => {
@@ -119,7 +120,7 @@ export default function ProgressScreen() {
                 This Week
               </Text>
               <Text style={styles.weeklyStats}>
-                You've learned {MOCK_DATA.weeklyFacts} new facts! 🎉
+                You've learned {totalFacts} new facts! 🎉
               </Text>
             </View>
           </View>
@@ -161,7 +162,7 @@ export default function ProgressScreen() {
             >
               <Text style={styles.statIcon}>🧠</Text>
               <Text style={[styles.statValue, { color: Colors.text }]}>
-                {MOCK_DATA.totalFacts}
+                {totalFacts}
               </Text>
               <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
                 Total Facts
