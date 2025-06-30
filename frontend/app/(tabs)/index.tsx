@@ -25,11 +25,9 @@ import { ReelCard } from '../../components/ReelCard';
 import { useReelAudioStore, useTTSAudioStore } from '../../lib/store';
 import { playCombinedTTS } from '../../lib/ttsUtils';
 import { CarouselCard } from '../../components/CarouselCard';
-import { useReelAudioStore } from '../../lib/store';
 import { useDailyContentTracker } from '../../hooks/useDailyContentTracker';
 import { useStreakData } from '../../hooks/useStreakData';
 // StreakCelebrationModal moved to streaks.tsx
-
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -344,9 +342,7 @@ export default function IndexScreen() {
     } else {
       console.log('📱 IndexScreen: Screen gained focus');
     }
-
   }, [isFocused, pauseAllVideos, pauseAllTTS]);
-
 
   // Initialize daily content tracking on mount
   useEffect(() => {
@@ -377,7 +373,6 @@ export default function IndexScreen() {
   }, [initializeDaily, fetchStreakData]);
 
   // StreakButton now handles its own data fetching
-
 
   // Engagement tracking state from 1-549
   const contentEngagementTracked = useRef<Set<string>>(new Set());
