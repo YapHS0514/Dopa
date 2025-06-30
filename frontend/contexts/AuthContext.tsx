@@ -127,21 +127,83 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    try {
-      const { error: supabaseError } = await supabase.auth.signOut();
-      if (supabaseError) throw supabaseError;
+    console.log('🚪 Starting signout process...');
 
-      try {
-        await apiClient.signOut();
-      } catch (apiError) {
-        console.warn('API signout failed, but continuing:', apiError);
+    try {
+      // Only call backend signout if we have a valid session
+      if (session?.access_token) {
+        try {
+          console.log('🔐 Calling backend signout...');
+          await apiClient.signOut();
+          console.log('✅ Backend signout successful');
+        } catch (apiError) {
+          console.warn('❌ API signout failed, but continuing:', apiError);
+        }
+      } else {
+        console.log(
+          '⚠️ No valid session for backend signout, skipping API call'
+        );
       }
 
+      // Always attempt Supabase signout for complete cleanup
+      console.log('🔒 Calling Supabase signout...');
+      try {
+        const { error: supabaseError } = await supabase.auth.signOut();
+        if (supabaseError) {
+          console.warn('⚠️ Supabase signout error:', supabaseError.message);
+
+          // Check if it's just a missing session (which is actually good)
+          if (supabaseError.message.includes('Auth session missing')) {
+            console.log('✅ Session was already cleared - this is expected');
+          } else {
+            console.error(
+              '🚨 Unexpected Supabase signout error:',
+              supabaseError.message
+            );
+          }
+        } else {
+          console.log('✅ Supabase signout successful');
+        }
+      } catch (supabaseError: any) {
+        console.warn('❌ Supabase signout exception:', supabaseError.message);
+      }
+
+      // Force clear ALL authentication state
+      console.log('🧹 Clearing all authentication state...');
+      setUser(null);
+      setSession(null);
+      setOnboardingCompleted(null);
+
+      // Clear API token
       apiClient.setToken(null);
+
+      // Additional cleanup: Clear any potential cached session data
+      try {
+        await supabase.auth.getSession(); // This helps ensure local storage is cleared
+      } catch (e) {
+        // Ignore errors here
+      }
+
+      console.log('✅ Signout complete, redirecting to login...');
       router.replace('/(auth)/login');
     } catch (error: any) {
-      console.error('Signout error:', error);
-      throw new Error(error.message);
+      console.error('🚨 Critical signout error:', error);
+
+      // Even if there's an error, force complete cleanup
+      console.log('🧹 Force clearing all state due to error...');
+      setUser(null);
+      setSession(null);
+      setOnboardingCompleted(null);
+      apiClient.setToken(null);
+
+      // Try to clear any remaining session data
+      try {
+        await supabase.auth.getSession();
+      } catch (e) {
+        // Ignore
+      }
+
+      router.replace('/(auth)/login');
     }
   };
 
