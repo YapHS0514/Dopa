@@ -7,7 +7,7 @@ load_dotenv()
 
 
 
-from .routers import content, interactions, topics, saved, recommendations, auth, user, badges
+from .routers import content, interactions, topics, saved, recommendations, auth, user, badges, tts
 
 
 # Import middleware
