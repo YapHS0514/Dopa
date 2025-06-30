@@ -2,6 +2,8 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { Platform, SafeAreaView } from 'react-native';
+import { Redirect } from 'expo-router';
+import { useAuth } from '../../contexts/AuthContext';
 import IndexScreen from './index';
 import SavedScreen from './saved';
 import ProgressScreen from './progress';
@@ -11,6 +13,17 @@ import ProfileScreen from './profile';
 const Tab = createBottomTabNavigator();
 
 export default function TabsLayout() {
+  const { user, loading } = useAuth();
+
+  // Show loading state while checking authentication
+  if (loading) {
+    return null;
+  }
+
+  // Redirect to login if not authenticated
+  if (!user) {
+    return <Redirect href="/(auth)/login" />;
+  }
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
       <Tab.Navigator
