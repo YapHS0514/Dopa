@@ -1,7 +1,13 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { apiClient } from '../lib/api';
 
-// Enhanced Fact interface with video support
+// Enhanced Fact interface with video and carousel support
+export interface CarouselSlide {
+  id: string;
+  image_url: string;
+  slide_index: number;
+}
+
 export interface Fact {
   id: string;
   hook: string;
@@ -15,7 +21,9 @@ export interface Fact {
   tags?: string[];
   // Add video support - using media_url for both images and videos
   video_url?: string;
-  contentType?: 'text' | 'reel';
+  contentType?: 'text' | 'reel' | 'carousel';
+  // Add carousel support
+  slides?: CarouselSlide[];
 }
 
 interface UseInfiniteContentReturn {
@@ -95,10 +103,10 @@ export const useInfiniteContent = (): UseInfiniteContentReturn => {
         (item: Fact) => !seenContentIds.current.has(item.id)
       );
 
-      // Enhance content with contentType
+      // Enhance content with contentType (preserve existing contentType from backend)
       const enhancedContent = newContent.map((item: Fact) => ({
         ...item,
-        contentType: item.video_url ? 'reel' as const : 'text' as const,
+        contentType: item.contentType || (item.video_url ? 'reel' as const : 'text' as const),
       }));
 
       console.log(`${enhancedContent.length} new items after deduplication`);

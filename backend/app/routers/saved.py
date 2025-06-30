@@ -40,15 +40,46 @@ async def get_saved_content(user: User = Depends(get_current_user)):
         # Create a mapping of content_id to content details
         content_map = {content["id"]: content for content in contents_response.data}
         
-        # Combine saved_contents data with actual content details
+        # For carousel content, fetch slides data
+        carousel_content_ids = [
+            content["id"] for content in contents_response.data 
+            if content.get("content_type") == "carousel"
+        ]
+        
+        slides_map = {}
+        if carousel_content_ids:
+            # Use admin client to bypass RLS for carousel slides
+            supabase_admin = get_supabase_admin_client()
+            slides_response = supabase_admin.table("carousel_slides").select(
+                "content_id, id, image_url, slide_index"
+            ).in_("content_id", carousel_content_ids).order("slide_index").execute()
+            
+            # Group slides by content_id
+            for slide in slides_response.data:
+                content_id = slide["content_id"]
+                if content_id not in slides_map:
+                    slides_map[content_id] = []
+                slides_map[content_id].append({
+                    "id": slide["id"],
+                    "image_url": slide["image_url"],
+                    "slide_index": slide["slide_index"]
+                })
+        
+        # Combine saved_contents data with actual content details and slides
         result = []
         for saved_item in saved_response.data:
             content_id = saved_item["content_id"]
             if content_id in content_map:
+                content_data = content_map[content_id].copy()
+                
+                # Add slides data for carousel content
+                if content_data.get("content_type") == "carousel" and content_id in slides_map:
+                    content_data["slides"] = slides_map[content_id]
+                
                 result.append({
                     "id": saved_item["id"],  # saved_contents.id
                     "created_at": saved_item["created_at"],  # when it was saved
-                    "content": content_map[content_id]  # actual content details
+                    "content": content_data  # actual content details with slides
                 })
         
         return {"data": result}
