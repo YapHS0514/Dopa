@@ -64,6 +64,11 @@ interface SavedContentItem {
     content_type: string;
     source_url?: string;
     media_url?: string;
+    slides?: Array<{
+      id: string;
+      image_url: string;
+      slide_index: number;
+    }>;
   };
 }
 
@@ -78,6 +83,9 @@ const transformSavedContentToFact = (savedItem: SavedContentItem): Fact => {
       content.media_url!.toLowerCase().endsWith(ext)
     );
 
+  // Handle different content types
+  const contentType = content.content_type || 'text';
+
   return {
     id: content.id,
     hook: content.title,
@@ -90,7 +98,11 @@ const transformSavedContentToFact = (savedItem: SavedContentItem): Fact => {
     readTime: 2, // TODO: Calculate or get from backend
     tags: [], // TODO: Add tags when available from backend
     video_url: isVideo ? content.media_url : '',
-    contentType: isVideo ? ('reel' as const) : ('text' as const),
+    contentType: isVideo
+      ? ('reel' as const)
+      : (contentType as 'text' | 'carousel'),
+    // Include slides data for carousel content from backend
+    slides: contentType === 'carousel' ? content.slides || [] : undefined,
   };
 };
 

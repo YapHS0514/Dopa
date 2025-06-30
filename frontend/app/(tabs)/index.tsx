@@ -24,10 +24,21 @@ import { apiClient } from '../../lib/api';
 import { ReelCard } from '../../components/ReelCard';
 import { useReelAudioStore, useTTSAudioStore } from '../../lib/store';
 import { playCombinedTTS } from '../../lib/ttsUtils';
+import { CarouselCard } from '../../components/CarouselCard';
+import { useReelAudioStore } from '../../lib/store';
+import { useDailyContentTracker } from '../../hooks/useDailyContentTracker';
+import { useStreakData } from '../../hooks/useStreakData';
+// StreakCelebrationModal moved to streaks.tsx
+
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-const getContentType = (fact: Fact): 'text' | 'reel' => {
+const getContentType = (fact: Fact): 'text' | 'reel' | 'carousel' => {
+  // Use the contentType from backend if available, otherwise fallback to detection
+  if (fact.contentType) {
+    return fact.contentType;
+  }
+  // Fallback detection
   return fact.video_url ? 'reel' : 'text';
 };
 
@@ -235,15 +246,81 @@ const ReelContent = ({
   );
 };
 
+// New component for Carousel content
+const CarouselContent = ({
+  fact,
+  onEngagementTracked,
+  contentEngagementTracked,
+}: {
+  fact: Fact;
+  onEngagementTracked?: (
+    contentId: string,
+    engagementType: string,
+    value: number
+  ) => void;
+  contentEngagementTracked?: React.MutableRefObject<Set<string>>;
+}) => {
+  // Ensure we have slides data
+  if (!fact.slides || fact.slides.length === 0) {
+    console.warn(
+      `🎠 Carousel content ${fact.id} has no slides, falling back to text display`
+    );
+    return (
+      <FactCarousel
+        fact={fact}
+        onEngagementTracked={onEngagementTracked}
+        contentEngagementTracked={contentEngagementTracked}
+      />
+    );
+  }
+
+  return (
+    <View style={{ flex: 1 }}>
+      <CarouselCard
+        slides={fact.slides}
+        title={fact.hook}
+        sourceUrl={fact.sourceUrl}
+        tags={fact.tags}
+        contentId={fact.id}
+        onEngagementTracked={onEngagementTracked}
+        contentEngagementTracked={contentEngagementTracked}
+      />
+      {/* Action buttons positioned on the right side */}
+      <ActionButtons
+        fact={{ ...fact, contentType: 'carousel' as const }}
+        style={styles.actionButtons}
+        onInteractionTracked={onEngagementTracked}
+      />
+    </View>
+  );
+};
+
 export default function IndexScreen() {
   const [factIndex, setFactIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const lastTrackedContentId = useRef<string | null>(null);
+  const celebrationTriggered = useRef<boolean>(false); // Still used to prevent multiple notifications
 
   // Navigation focus detection
   const isFocused = useIsFocused();
   const { pauseAllVideos } = useReelAudioStore();
   const { pauseAllAudio: pauseAllTTS, currentlyPlayingId } = useTTSAudioStore();
+
+  // Daily content tracking and streak system
+  const { progress, initializeDaily, trackContentInteraction } =
+    useDailyContentTracker();
+
+  const {
+    currentStreak,
+    fetchStreakData,
+    setStreakNotification,
+    hasUnseenStreakNotification,
+  } = useStreakData();
+
+  // Debug notification state
+  useEffect(() => {
+    console.log(`🔔 Streak notification state: ${hasUnseenStreakNotification}`);
+  }, [hasUnseenStreakNotification]);
 
   // Use the new infinite content hook
   const {
@@ -267,17 +344,99 @@ export default function IndexScreen() {
     } else {
       console.log('📱 IndexScreen: Screen gained focus');
     }
+
   }, [isFocused, pauseAllVideos, pauseAllTTS]);
+
+
+  // Initialize daily content tracking on mount
+  useEffect(() => {
+    initializeDaily();
+    fetchStreakData().catch(console.error); // Handle potential promise rejection
+    // Reset celebration trigger flag on mount
+    celebrationTriggered.current = false;
+
+    // Debug: Log celebration history on mount
+    const checkCelebrationHistory = async () => {
+      const { default: AsyncStorage } = await import(
+        '@react-native-async-storage/async-storage'
+      );
+      const lastCelebration = await AsyncStorage.getItem(
+        'lastStreakCelebration'
+      );
+      console.log(
+        `🎯 DEBUG: Last celebration date on mount: ${lastCelebration || 'null'}`
+      );
+
+      // UNCOMMENT THIS LINE TO FORCE CLEAR CELEBRATION HISTORY FOR NEW ACCOUNTS:
+      // if (lastCelebration) {
+      //   console.log('🧹 Force clearing celebration history for new account');
+      //   clearCelebrationHistory();
+      // }
+    };
+    checkCelebrationHistory();
+  }, [initializeDaily, fetchStreakData]);
+
+  // StreakButton now handles its own data fetching
+
 
   // Engagement tracking state from 1-549
   const contentEngagementTracked = useRef<Set<string>>(new Set());
+
+  // Enhanced track interaction that also marks content as tracked and handles daily streak progress
   const trackEngagement = useCallback(
-    (contentId: string, engagementType: string, value: number) => {
+    async (contentId: string, engagementType: string, value: number) => {
       contentEngagementTracked.current.add(contentId);
+
+      // Track the interaction for recommendation engine
       trackInteraction(contentId, engagementType, value);
+
+      // Track content consumption for daily streak system
+      try {
+        const trackingResult = await trackContentInteraction(contentId);
+        console.log('🎯 Daily tracking result:', trackingResult);
+
+        // Set notification when streak is earned or threshold reached
+        if (
+          (trackingResult.streakEarned || trackingResult.isNewThreshold) &&
+          !celebrationTriggered.current
+        ) {
+          console.log(
+            '🔔 Daily streak threshold reached! Setting notification...'
+          );
+          console.log(`   • Streak earned: ${trackingResult.streakEarned}`);
+          console.log(`   • New threshold: ${trackingResult.isNewThreshold}`);
+
+          // Mark as handled to prevent multiple notifications
+          celebrationTriggered.current = true;
+
+          // Fetch updated streak data
+          const updatedStreakData = await fetchStreakData();
+
+          // Set notification for user to see on streak button
+          if (
+            updatedStreakData.currentStreak > 0 ||
+            trackingResult.isNewThreshold
+          ) {
+            const streakToShow = Math.max(1, updatedStreakData.currentStreak);
+            console.log(
+              `🔔 Setting streak notification for ${streakToShow} days`
+            );
+            setStreakNotification(true, streakToShow);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error tracking daily content:', error);
+      }
     },
-    [trackInteraction]
+    [
+      trackInteraction,
+      trackContentInteraction,
+      fetchStreakData,
+      setStreakNotification,
+    ]
   );
+
+  // No longer needed - celebration modal moved to streaks.tsx
 
   // Handle scroll events for infinite loading
   const handleScroll = useCallback(
@@ -294,12 +453,13 @@ export default function IndexScreen() {
       if (currentIndex !== factIndex && facts[factIndex]) {
         const previousContent = facts[factIndex];
         const contentType = getContentType(previousContent);
+        // For text and carousel content, check if user skipped without swiping
         if (
-          contentType === 'text' &&
+          (contentType === 'text' || contentType === 'carousel') &&
           !contentEngagementTracked.current.has(previousContent.id)
         ) {
           console.log(
-            `📖 TextContent ${previousContent.id}: Left without swiping - tracking as skip`
+            `📖 ${contentType}Content ${previousContent.id}: Left without swiping - tracking as skip`
           );
           trackInteraction(previousContent.id, 'skip', -2);
           contentEngagementTracked.current.add(previousContent.id);
@@ -381,6 +541,14 @@ export default function IndexScreen() {
             onEngagementTracked={trackEngagement}
           />
         );
+      } else if (contentType === 'carousel') {
+        return (
+          <CarouselContent
+            fact={item}
+            onEngagementTracked={trackEngagement}
+            contentEngagementTracked={contentEngagementTracked}
+          />
+        );
       } else {
         return (
           <FactCarousel
@@ -429,6 +597,16 @@ export default function IndexScreen() {
           />
         </TouchableOpacity>
         <Text style={styles.headerText}>DOPA</Text>
+
+        {/* Daily Progress Indicator */}
+        {progress.current > 0 && progress.current < progress.threshold && (
+          <View style={styles.progressContainer}>
+            <Text style={styles.progressText}>
+              {progress.current}/{progress.threshold} today 📚
+            </Text>
+          </View>
+        )}
+
         <StreakButton />
       </View>
       {loading && facts.length === 0 ? (
@@ -472,11 +650,33 @@ export default function IndexScreen() {
           onMomentumScrollEnd={handleMomentumScrollEnd}
           scrollEventThrottle={16}
           removeClippedSubviews={false}
-          maxToRenderPerBatch={2}
-          windowSize={3}
-          initialNumToRender={1}
           updateCellsBatchingPeriod={100}
           decelerationRate="fast"
+          maxToRenderPerBatch={4} // Increased for better batch handling
+          windowSize={7} // Larger window to keep more components mounted and reduce unmount/remount cycles
+          initialNumToRender={3} // Start with more items
+          maintainVisibleContentPosition={{
+            minIndexForVisible: 0,
+            autoscrollToTopThreshold: 10,
+          }} // Help maintain position during re-renders
+          onScrollToIndexFailed={(info) => {
+            // Handle failed scroll - fallback to offset
+            const wait = new Promise((resolve) => setTimeout(resolve, 500));
+            wait.then(() => {
+              flatListRef.current?.scrollToOffset({
+                offset: info.index * SCREEN_HEIGHT,
+                animated: false,
+              });
+            });
+          }}
+          onEndReached={() => {
+            // Backup infinite scroll trigger
+            if (hasMore && !loading) {
+              console.log('🔄 onEndReached: Loading more content');
+              loadMoreContent();
+            }
+          }}
+          onEndReachedThreshold={0.3} // Trigger earlier for better UX
         />
       )}
       {loading && facts.length > 0 && (
@@ -484,6 +684,8 @@ export default function IndexScreen() {
           <ActivityIndicator size="small" color={Colors.tint} />
         </View>
       )}
+
+      {/* Streak celebration modal moved to streaks.tsx */}
     </SafeAreaView>
   );
 }
@@ -500,7 +702,7 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: '#000',
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 20 : 50,
-    paddingBottom: 25,
+    paddingBottom: 15,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 50,
@@ -593,5 +795,20 @@ const styles = StyleSheet.create({
     right: 15,
     bottom: 200,
     zIndex: 10,
+  },
+  progressContainer: {
+    position: 'absolute',
+    top: Platform.OS === 'android' ? (StatusBar.currentHeight || 20) + 95 : 143,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  progressText: {
+    color: '#fff',
+    fontSize: 12,
+    fontFamily: 'SF-Pro-Display',
+    opacity: 0.8,
   },
 });

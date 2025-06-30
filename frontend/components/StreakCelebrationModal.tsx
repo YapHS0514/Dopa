@@ -26,12 +26,24 @@ const StreakCelebrationModal: React.FC<StreakCelebrationModalProps> = ({
   currentStreak,
   onClose,
 }) => {
+  console.log('🎭 StreakCelebrationModal: Component rendered with props:');
+  console.log(`   • visible: ${visible}`);
+  console.log(`   • currentStreak: ${currentStreak}`);
+
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const confettiRef = useRef<any>(null);
 
   useEffect(() => {
+    console.log(
+      `🎭 StreakCelebrationModal: useEffect triggered with visible=${visible}`
+    );
+
     if (visible) {
+      console.log(
+        '🎉 StreakCelebrationModal: Showing modal - starting animations and confetti'
+      );
+
       // Start confetti
       setTimeout(() => {
         confettiRef.current?.start();
@@ -52,6 +64,10 @@ const StreakCelebrationModal: React.FC<StreakCelebrationModalProps> = ({
         }),
       ]).start();
     } else {
+      console.log(
+        '🎭 StreakCelebrationModal: Hiding modal - resetting animations'
+      );
+
       // Reset animations
       scaleAnim.setValue(0);
       fadeAnim.setValue(0);
@@ -84,7 +100,7 @@ const StreakCelebrationModal: React.FC<StreakCelebrationModalProps> = ({
       statusBarTranslucent
     >
       <StatusBar backgroundColor="transparent" barStyle="light-content" />
-      
+
       {/* Background with gradient */}
       <LinearGradient
         colors={['#FF6B35', '#F7931E', '#FFD23F']}
@@ -150,8 +166,8 @@ const StreakCelebrationModal: React.FC<StreakCelebrationModalProps> = ({
             {currentStreak >= 7
               ? "You're absolutely crushing it! 🚀"
               : currentStreak >= 3
-              ? "Keep the momentum going! 💪"
-              : "Great start! Keep it up! ⭐"}
+              ? 'Keep the momentum going! 💪'
+              : 'Great start! Keep it up! ⭐'}
           </Text>
 
           {/* Continue button */}
@@ -290,4 +306,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default StreakCelebrationModal; 
+export default StreakCelebrationModal;

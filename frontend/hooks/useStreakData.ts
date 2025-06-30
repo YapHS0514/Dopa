@@ -3,36 +3,42 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiClient } from '../lib/api';
 
 interface StreakData {
-  activeDays: number;
-  streakDays: string[];
   currentStreak: number;
   bestStreak: number;
-  streakRevivalCount: number;
   todayCompleted: boolean;
-  rewardEarned: boolean;
+  lastStreakDate: string | null;
+  canEarnStreakToday: boolean;
+  milestoneReached: boolean;
 }
 
 interface StreakStore extends StreakData {
   showStreakModal: boolean;
   isLoading: boolean;
   lastCelebrationDate: string | null;
+  hasUnseenStreakNotification: boolean; // New: tracks if user has unseen streak achievement
+  pendingCelebrationStreak: number; // New: stores the streak days to celebrate
   setShowStreakModal: (show: boolean) => void;
-  fetchStreakData: () => Promise<void>;
+  fetchStreakData: () => Promise<StreakData>;
   markCelebrationShown: () => Promise<void>;
+  triggerCelebration: (streakDays: number, forceShow?: boolean) => Promise<void>;
+  clearCelebrationHistory: () => Promise<void>;
+  setStreakNotification: (hasNotification: boolean, streakDays?: number) => void; // New: set notification state
+  clearStreakNotification: () => void; // New: clear notification after viewing
 }
 
 const useStreakStore = create<StreakStore>((set, get) => ({
   // Initial state
-  activeDays: 0,
-  streakDays: [],
   currentStreak: 0,
   bestStreak: 0,
-  streakRevivalCount: 0,
   todayCompleted: false,
-  rewardEarned: false,
+  lastStreakDate: null,
+  canEarnStreakToday: false,
+  milestoneReached: false,
   showStreakModal: false,
   isLoading: false,
   lastCelebrationDate: null,
+  hasUnseenStreakNotification: false,
+  pendingCelebrationStreak: 0,
 
   setShowStreakModal: (show: boolean) => {
     set({ showStreakModal: show });
@@ -42,36 +48,58 @@ const useStreakStore = create<StreakStore>((set, get) => ({
     try {
       set({ isLoading: true });
       
-      const response: any = await apiClient.get('/api/user/streak');
+      const response: any = await apiClient.getUserStreak();
+      console.log('📊 Fetched streak data:', response);
+      
       const streakData: StreakData = {
-        activeDays: response.active_days,
-        streakDays: response.streak_days,
-        currentStreak: response.current_streak,
-        bestStreak: response.best_streak,
-        streakRevivalCount: response.streak_revival_count,
-        todayCompleted: response.today_completed,
-        rewardEarned: response.reward_earned,
+        currentStreak: response.current_streak || 0,
+        bestStreak: response.best_streak || 0,
+        todayCompleted: response.today_completed || false,
+        lastStreakDate: response.last_streak_date,
+        canEarnStreakToday: response.can_earn_streak_today || false,
+        milestoneReached: response.milestone_reached || false,
       };
-
-      // Load last celebration date from storage
-      const lastCelebrationDate = await AsyncStorage.getItem('lastStreakCelebration');
-      const today = new Date().toISOString().split('T')[0];
-
-      // Show modal if today is completed and we haven't celebrated today
-      const shouldShowModal = streakData.todayCompleted && 
-                            streakData.currentStreak > 0 && 
-                            lastCelebrationDate !== today;
 
       set({
         ...streakData,
-        lastCelebrationDate,
-        showStreakModal: shouldShowModal,
         isLoading: false,
       });
 
+      return streakData; // Return the fetched data
+
     } catch (error) {
-      console.error('Error fetching streak data:', error);
+      console.error('❌ Error fetching streak data:', error);
       set({ isLoading: false });
+      throw error; // Re-throw to allow caller to handle
+    }
+  },
+
+  triggerCelebration: async (streakDays: number, forceShow: boolean = false) => {
+    const lastCelebrationDate = await AsyncStorage.getItem('lastStreakCelebration');
+    const today = new Date().toISOString().split('T')[0];
+
+    console.log(`🎯 triggerCelebration called with streakDays: ${streakDays}, forceShow: ${forceShow}`);
+    console.log(`🎯 lastCelebrationDate: ${lastCelebrationDate || 'null'}, today: ${today}`);
+    
+    const hasntCelebratedToday = lastCelebrationDate !== today;
+    const hasValidStreak = streakDays > 0;
+    
+    console.log(`🎯 Date check: ${hasntCelebratedToday}, Streak check: ${hasValidStreak}`);
+
+    // Show modal if we haven't celebrated this streak yet today OR if forcing
+    // When forceShow=true, ignore date check but still require valid streak
+    if ((hasntCelebratedToday && hasValidStreak) || (forceShow && hasValidStreak)) {
+      console.log(`🎉 Triggering streak celebration for ${streakDays} days!`);
+      set({ 
+        showStreakModal: true,
+        currentStreak: streakDays 
+      });
+    } else {
+      console.log(`🚫 Not showing celebration modal:`);
+      console.log(`   • Already celebrated today: ${!hasntCelebratedToday} (last: ${lastCelebrationDate || 'never'})`);
+      console.log(`   • forceShow: ${forceShow}`);
+      console.log(`   • Valid streak days: ${hasValidStreak} (${streakDays})`);
+      console.log(`   • Should show: ${(hasntCelebratedToday && hasValidStreak) || (forceShow && hasValidStreak)}`);
     }
   },
 
@@ -83,6 +111,31 @@ const useStreakStore = create<StreakStore>((set, get) => ({
       showStreakModal: false 
     });
   },
+
+  // Clear celebration history - useful for new accounts or testing
+  clearCelebrationHistory: async () => {
+    await AsyncStorage.removeItem('lastStreakCelebration');
+    set({ lastCelebrationDate: null });
+    console.log('🧹 Cleared celebration history');
+  },
+
+  // Set streak notification (when user earns a streak)
+  setStreakNotification: (hasNotification: boolean, streakDays: number = 0) => {
+    set({ 
+      hasUnseenStreakNotification: hasNotification, 
+      pendingCelebrationStreak: streakDays 
+    });
+    console.log(`🔔 Streak notification set: ${hasNotification}, streak: ${streakDays}`);
+  },
+
+  // Clear streak notification (when user views it)
+  clearStreakNotification: () => {
+    set({ 
+      hasUnseenStreakNotification: false, 
+      pendingCelebrationStreak: 0 
+    });
+    console.log('🔕 Streak notification cleared');
+  },
 }));
 
 // Hook for easier usage in components
@@ -91,22 +144,29 @@ export const useStreakData = () => {
   
   return {
     // Data
-    activeDays: store.activeDays,
-    streakDays: store.streakDays,
     currentStreak: store.currentStreak,
     bestStreak: store.bestStreak,
-    streakRevivalCount: store.streakRevivalCount,
     todayCompleted: store.todayCompleted,
-    rewardEarned: store.rewardEarned,
+    lastStreakDate: store.lastStreakDate,
+    canEarnStreakToday: store.canEarnStreakToday,
+    milestoneReached: store.milestoneReached,
     isLoading: store.isLoading,
     
     // Modal state
     showStreakModal: store.showStreakModal,
     setShowStreakModal: store.setShowStreakModal,
     
+    // Notification state
+    hasUnseenStreakNotification: store.hasUnseenStreakNotification,
+    pendingCelebrationStreak: store.pendingCelebrationStreak,
+    
     // Actions
     fetchStreakData: store.fetchStreakData,
     markCelebrationShown: store.markCelebrationShown,
+    triggerCelebration: store.triggerCelebration,
+    clearCelebrationHistory: store.clearCelebrationHistory,
+    setStreakNotification: store.setStreakNotification,
+    clearStreakNotification: store.clearStreakNotification,
   };
 };
 

@@ -61,6 +61,11 @@ export function ReelCard({
   const hasTrackedEngagement = useRef(false);
   const totalWatchTime = useRef(0);
 
+  // Component mounting detection
+  useEffect(() => {
+    mountedRef.current = true;
+  }, []); // Empty dependency array ensures this runs on every mount
+
   // Enhanced Zustand store with cleanup capabilities
   const {
     shouldBeMuted,
@@ -73,10 +78,6 @@ export function ReelCard({
 
   const isMuted = shouldBeMuted(contentId, isVisible);
   const isCurrentlyPlaying = getCurrentlyPlaying() === contentId;
-
-  console.log(
-    `🎥 ReelCard ${contentId}: isVisible=${isVisible}, shouldBeMuted=${isMuted}, loaded=${isVideoLoaded}, playing=${isPlaying}`
-  );
 
   // Register video ref with store for cleanup management
   useEffect(() => {
@@ -122,12 +123,6 @@ export function ReelCard({
       engagementValue = 2;
     }
 
-    console.log(
-      `📊 ReelCard ${contentId}: Watch time ${totalWatchTime.current.toFixed(
-        1
-      )}s -> ${engagementType} (${engagementValue})`
-    );
-
     hasTrackedEngagement.current = true;
     onEngagementTracked?.(contentId, engagementType, engagementValue);
 
@@ -139,9 +134,6 @@ export function ReelCard({
   const safeVideoOperation = useCallback(
     async (operation: () => Promise<void>, operationName: string) => {
       if (!videoRef.current || !mountedRef.current) {
-        console.log(
-          `⚠️ ReelCard ${contentId}: Skipping ${operationName} - video ref or component not available`
-        );
         return false;
       }
 
@@ -149,10 +141,6 @@ export function ReelCard({
         await operation();
         return true;
       } catch (error) {
-        console.error(
-          `❌ ReelCard ${contentId}: Error in ${operationName}:`,
-          error
-        );
         return false;
       }
     },
@@ -162,20 +150,11 @@ export function ReelCard({
   // Auto-retry logic with exponential backoff
   const autoRetry = useCallback(async () => {
     if (retryCount >= 3 || autoRetrying) {
-      console.log(
-        `❌ ReelCard ${contentId}: Max retries reached or already retrying`
-      );
       return;
     }
 
     setAutoRetrying(true);
     const backoffDelay = Math.min(1000 * Math.pow(2, retryCount), 5000); // Max 5 seconds
-
-    console.log(
-      `🔄 ReelCard ${contentId}: Auto-retry ${
-        retryCount + 1
-      }/3 in ${backoffDelay}ms`
-    );
 
     setTimeout(() => {
       if (mountedRef.current) {
@@ -198,7 +177,6 @@ export function ReelCard({
       // Set loading timeout (8 seconds for better UX)
       loadingTimeoutRef.current = setTimeout(() => {
         if (mountedRef.current && !isVideoLoaded) {
-          console.warn(`⏰ ReelCard ${contentId}: Loading timeout`);
           setHasError(true);
           setIsLoading(false);
           autoRetry();
@@ -206,10 +184,6 @@ export function ReelCard({
       }, 8000);
 
       return await safeVideoOperation(async () => {
-        console.log(
-          `📥 ReelCard ${contentId}: Loading video (shouldPlay: ${shouldPlay})`
-        );
-
         if (!videoRef.current) {
           throw new Error('Video ref is null during loading');
         }
@@ -248,14 +222,7 @@ export function ReelCard({
           if (videoRef.current) {
             try {
               await videoRef.current.setIsMutedAsync(isMuted);
-              console.log(
-                `🔊 ReelCard ${contentId}: Mute state set to ${isMuted} after loading`
-              );
             } catch (error) {
-              console.error(
-                `❌ ReelCard ${contentId}: Error setting mute state after loading:`,
-                error
-              );
             }
           }
 
@@ -266,8 +233,6 @@ export function ReelCard({
             setCurrentlyPlaying(contentId);
           }
         }
-
-        console.log(`✅ ReelCard ${contentId}: Video loaded successfully`);
       }, 'loadVideo');
     },
     [
@@ -286,12 +251,8 @@ export function ReelCard({
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (isVisible && !hasError) {
-        console.log(`🎬 ReelCard ${contentId}: Becoming visible`);
-
-        // Start watch time tracking (only if engagement tracking is enabled)
         if (!disableEngagementTracking && !hasTrackedEngagement.current) {
           watchStartTime.current = Date.now();
-          console.log(`⏱️ ReelCard ${contentId}: Started watch timer`);
         }
 
         if (!isVideoLoaded) {
@@ -309,13 +270,9 @@ export function ReelCard({
           }, 'startPlayback');
 
           if (success) {
-            console.log(`▶️ ReelCard ${contentId}: Resumed playback`);
           }
         }
       } else if (!isVisible && isVideoLoaded) {
-        console.log(`🛑 ReelCard ${contentId}: Becoming invisible`);
-
-        // Track engagement before pausing
         trackEngagementOnLeave();
 
         // Just pause, don't unload (better for performance and user experience)
@@ -352,27 +309,25 @@ export function ReelCard({
     if (!isVisible || !isVideoLoaded || !videoRef.current) return;
 
     const updateMuteState = async () => {
-      console.log(
-        `🔊 ReelCard ${contentId}: Updating mute state to ${isMuted}`
-      );
-
       await safeVideoOperation(async () => {
         if (!videoRef.current) {
-          console.warn(
-            `⚠️ ReelCard ${contentId}: Video ref is null during mute update`
-          );
           return;
         }
         await videoRef.current.setIsMutedAsync(isMuted);
-        console.log(
-          `✅ ReelCard ${contentId}: Mute state updated to ${isMuted}`
-        );
       }, 'updateMuteState');
     };
 
     // Immediate update without delay to prevent audio glitches
     updateMuteState();
   }, [isMuted, isVisible, isVideoLoaded, contentId, safeVideoOperation]);
+
+  // Simple video loading when component needs it
+  useEffect(() => {
+    if (mountedRef.current && !isVideoLoaded && !isLoading && !hasError) {
+      setIsLoading(true);
+      loadVideo(false);
+    }
+  }, [contentId, isVideoLoaded, isLoading, hasError, loadVideo]); // Trigger when visibility or state changes
 
   // Preload when component mounts (for better scroll performance)
   useEffect(() => {
@@ -382,7 +337,6 @@ export function ReelCard({
 
       const preloadTimer = setTimeout(() => {
         if (mountedRef.current && !isVideoLoaded && !hasError) {
-          console.log(`🔄 ReelCard ${contentId}: Preloading video...`);
           loadVideo(false); // Preload without playing
         }
       }, preloadDelay);
@@ -394,8 +348,6 @@ export function ReelCard({
   // Component cleanup on unmount
   useEffect(() => {
     return () => {
-      console.log(`🧹 ReelCard ${contentId}: Component unmounting`);
-
       // Track engagement before unmounting if needed
       trackEngagementOnLeave();
 
@@ -405,7 +357,6 @@ export function ReelCard({
       // Cleanup video resources
       if (videoRef.current) {
         videoRef.current.unloadAsync().catch((error) => {
-          console.error(`❌ ReelCard ${contentId}: Cleanup error:`, error);
         });
       }
     };
@@ -432,9 +383,6 @@ export function ReelCard({
             !hasTrackedEngagement.current &&
             watchStartTime.current
           ) {
-            console.log(
-              `🎯 ReelCard ${contentId}: Video completed - tracking as engaged`
-            );
             hasTrackedEngagement.current = true;
             onEngagementTracked?.(contentId, 'engaged', 2);
           }
@@ -449,18 +397,11 @@ export function ReelCard({
 
         // Detect corrupted/invalid videos
         if (status.durationMillis && status.durationMillis < 100) {
-          console.warn(
-            `⚠️ ReelCard ${contentId}: Video might be corrupted (duration: ${status.durationMillis}ms)`
-          );
           setHasError(true);
           setIsLoading(false);
           autoRetry();
         }
       } else if (status.error) {
-        console.error(
-          `❌ ReelCard ${contentId}: Playback error:`,
-          status.error
-        );
         setHasError(true);
         setIsLoading(false);
         autoRetry();
@@ -471,7 +412,6 @@ export function ReelCard({
 
   const handleVideoLoad = useCallback(() => {
     if (!mountedRef.current) return;
-    console.log(`📹 ReelCard ${contentId}: Video loaded successfully`);
     clearLoadingTimeout();
     setIsVideoLoaded(true);
     setIsLoading(false);
@@ -483,16 +423,13 @@ export function ReelCard({
   const handleVideoError = useCallback(
     (error: any) => {
       if (!mountedRef.current) return;
-      console.error(`❌ ReelCard ${contentId}: Video load error:`, error);
-      console.error(`❌ ReelCard ${contentId}: Video URL:`, videoUrl);
-      clearLoadingTimeout();
       setIsLoading(false);
       setHasError(true);
       setIsVideoLoaded(false);
       onError?.(error.message || 'Failed to load video');
       autoRetry();
     },
-    [contentId, videoUrl, clearLoadingTimeout, onError, autoRetry]
+    [contentId, onError, autoRetry]
   );
 
   const togglePlayPause = useCallback(async () => {
@@ -518,19 +455,16 @@ export function ReelCard({
   ]);
 
   const handleManualRetry = useCallback(() => {
-    console.log(`🔄 ReelCard ${contentId}: Manual retry requested`);
     setRetryCount(0);
     setAutoRetrying(false);
     setHasError(false);
     setIsLoading(true);
     setIsVideoLoaded(false);
-  }, [contentId]);
+  }, []);
 
   const handleDismissError = useCallback(() => {
-    console.log(`❌ ReelCard ${contentId}: Error dismissed by user`);
-    // This could trigger a callback to parent to skip this video
     onError?.('Video dismissed by user');
-  }, [contentId, onError]);
+  }, [onError]);
 
   useEffect(() => {
     if (videoRef.current && isVisible) {
@@ -601,7 +535,6 @@ export function ReelCard({
           onLoadStart={() => {
             if (mountedRef.current) {
               setIsLoading(true);
-              console.log(`🔄 ReelCard ${contentId}: Video load started`);
               onLoadStart?.();
             }
           }}
@@ -632,17 +565,6 @@ export function ReelCard({
       <View style={styles.titleContainer}>
         <Text style={styles.title}>{title}</Text>
       </View>
-
-      {/* Debug: Show current audio state */}
-      {__DEV__ && (
-        <View style={styles.debugInfo}>
-          <Text style={styles.debugText}>
-            Visible: {isVisible ? 'YES' : 'NO'} | Muted:{' '}
-            {isMuted ? 'YES' : 'NO'} | Playing: {isPlaying ? 'YES' : 'NO'} |
-            Loaded: {isVideoLoaded ? 'YES' : 'NO'} | Retries: {retryCount}
-          </Text>
-        </View>
-      )}
     </Animatable.View>
   );
 }
@@ -753,19 +675,5 @@ const styles = StyleSheet.create({
     top: 60,
     left: 20,
     zIndex: 10,
-  },
-  debugInfo: {
-    position: 'absolute',
-    top: 100,
-    left: 20,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    padding: 8,
-    borderRadius: 4,
-    zIndex: 15,
-  },
-  debugText: {
-    color: '#fff',
-    fontSize: 12,
-    fontFamily: 'SF-Pro-Display',
   },
 });

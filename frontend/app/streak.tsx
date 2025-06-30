@@ -43,18 +43,20 @@ const YEARS = Array.from({ length: 2100 - 2024 + 1 }, (_, i) => 2024 + i);
 export default function StreakScreen() {
   const theme = useStore((state) => state.theme);
   const {
-    activeDays,
-    streakDays,
     currentStreak,
     bestStreak,
-    streakRevivalCount,
     todayCompleted,
-    rewardEarned,
+    lastStreakDate,
+    canEarnStreakToday,
+    milestoneReached,
     isLoading,
     showStreakModal,
     setShowStreakModal,
     fetchStreakData,
     markCelebrationShown,
+    hasUnseenStreakNotification,
+    pendingCelebrationStreak,
+    clearStreakNotification,
   } = useStreakData();
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
@@ -68,6 +70,45 @@ export default function StreakScreen() {
     fetchStreakData();
   }, [fetchStreakData]);
 
+  // Show celebration modal if user navigated here with a pending notification
+  useEffect(() => {
+    console.log('🎭 StreakScreen: Checking celebration modal conditions...');
+    console.log(
+      `   • hasUnseenStreakNotification: ${hasUnseenStreakNotification}`
+    );
+    console.log(`   • pendingCelebrationStreak: ${pendingCelebrationStreak}`);
+    console.log(`   • showStreakModal: ${showStreakModal}`);
+
+    if (hasUnseenStreakNotification && pendingCelebrationStreak > 0) {
+      console.log(
+        `🎉 Auto-showing celebration modal for ${pendingCelebrationStreak} day streak`
+      );
+      setShowStreakModal(true);
+    } else {
+      console.log('🚫 Celebration modal conditions not met:');
+      if (!hasUnseenStreakNotification) {
+        console.log('   • No unseen streak notification');
+      }
+      if (pendingCelebrationStreak <= 0) {
+        console.log(
+          `   • No pending celebration streak (${pendingCelebrationStreak})`
+        );
+      }
+    }
+  }, [
+    hasUnseenStreakNotification,
+    pendingCelebrationStreak,
+    setShowStreakModal,
+  ]);
+
+  // Handle closing the celebration modal
+  const handleCelebrationClose = () => {
+    setShowStreakModal(false);
+    markCelebrationShown();
+    clearStreakNotification(); // Clear the notification state
+    console.log('🎭 Celebration modal closed from streak screen');
+  };
+
   const getDaysInMonth = (month: number, year: number) => {
     return new Date(year, month + 1, 0).getDate();
   };
@@ -76,10 +117,28 @@ export default function StreakScreen() {
     return new Date(year, month, 1).getDay();
   };
 
+  // Generate streak days based on current streak and last streak date
+  const generateStreakDays = () => {
+    if (!lastStreakDate || currentStreak === 0) return [];
+
+    const streakDays: string[] = [];
+    const endDate = new Date(lastStreakDate);
+
+    // Generate consecutive days going backwards from last streak date
+    for (let i = 0; i < currentStreak; i++) {
+      const date = new Date(endDate);
+      date.setDate(date.getDate() - i);
+      streakDays.push(date.toISOString().split('T')[0]);
+    }
+
+    return streakDays;
+  };
+
   const renderCalendar = () => {
     const daysInMonth = getDaysInMonth(currentMonth, currentYear);
     const firstDay = getFirstDayOfMonth(currentMonth, currentYear);
     const days = [];
+    const streakDays = generateStreakDays(); // ✅ Generate streak days from database data
 
     for (let i = 0; i < firstDay; i++) {
       days.push(<View key={`empty-${i}`} style={styles.calendarDay} />);
@@ -90,6 +149,7 @@ export default function StreakScreen() {
       const currentDate = new Date(currentYear, currentMonth, i);
       const dateStr = currentDate.toISOString().split('T')[0];
       const isActive = streakDays.includes(dateStr);
+      const isToday = dateStr === new Date().toISOString().split('T')[0];
 
       days.push(
         <View key={i} style={styles.calendarDay}>
@@ -99,12 +159,19 @@ export default function StreakScreen() {
               isActive && {
                 backgroundColor: '#ef4444',
               },
+              isToday &&
+                !isActive && {
+                  borderWidth: 2,
+                  borderColor: '#ef4444',
+                },
             ]}
           >
             <Text
               style={[
                 styles.calendarDayText,
-                { color: isActive ? '#fff' : Colors.text },
+                {
+                  color: isActive ? '#fff' : isToday ? '#ef4444' : Colors.text,
+                },
               ]}
             >
               {i}
@@ -260,10 +327,10 @@ export default function StreakScreen() {
             ]}
           >
             <Text style={[styles.statValue, { color: Colors.text }]}>
-              {activeDays}
+              {currentStreak}
             </Text>
             <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
-              Active Days
+              Current Streak
             </Text>
           </TouchableOpacity>
 
@@ -274,10 +341,10 @@ export default function StreakScreen() {
             ]}
           >
             <Text style={[styles.statValue, { color: Colors.text }]}>
-              {streakRevivalCount}
+              {bestStreak}
             </Text>
             <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
-              Streak Revives
+              Best Streak
             </Text>
           </TouchableOpacity>
         </View>
@@ -305,7 +372,7 @@ export default function StreakScreen() {
         </View>
 
         <View style={styles.rewardProgress}>
-          {rewardEarned ? (
+          {milestoneReached ? (
             <Text style={[styles.rewardText, { color: Colors.tint }]}>
               🎉 Congratulations! You've earned 100 coins! 💰
             </Text>
@@ -429,10 +496,24 @@ export default function StreakScreen() {
       )}
 
       {/* Streak Celebration Modal */}
+      {(() => {
+        console.log('🎭 StreakScreen: Rendering StreakCelebrationModal...');
+        console.log(`   • visible: ${showStreakModal}`);
+        console.log(
+          `   • pendingCelebrationStreak: ${pendingCelebrationStreak}`
+        );
+        console.log(`   • currentStreak: ${currentStreak}`);
+        console.log(
+          `   • currentStreak prop: ${
+            pendingCelebrationStreak || currentStreak
+          }`
+        );
+        return null;
+      })()}
       <StreakCelebrationModal
         visible={showStreakModal}
-        currentStreak={currentStreak}
-        onClose={markCelebrationShown}
+        currentStreak={pendingCelebrationStreak || currentStreak}
+        onClose={handleCelebrationClose}
       />
     </SafeAreaView>
   );

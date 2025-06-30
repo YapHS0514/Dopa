@@ -162,11 +162,19 @@ class ApiClient {
   }
 
   async recordInteraction(contentId: string, interactionType: string, interactionValue: number) {
-    return this.post('/api/interactions', {
-      content_id: contentId,
-      interaction_type: interactionType,
-      interaction_value: interactionValue,
-    });
+    console.log(`🎯 API Client: Recording interaction ${interactionType} for content ${contentId} with value ${interactionValue}`);
+    try {
+      const result = await this.post('/api/interactions', {
+        content_id: contentId,
+        interaction_type: interactionType,
+        interaction_value: interactionValue,
+      });
+      console.log(`✅ API Client: Interaction recorded successfully:`, result);
+      return result;
+    } catch (error) {
+      console.error(`❌ API Client: Failed to record interaction:`, error);
+      throw error;
+    }
   }
 
   async getUserStats() {
@@ -274,6 +282,19 @@ class ApiClient {
 
   async getAvailableVoices(): Promise<any> {
     return this.get('/api/tts/voices');
+  }
+
+  // ✅ Streak-related methods  
+  async getUserStreak() {
+    return this.get('/api/user/streak');
+  }
+
+  async updateDailyStreak() {
+    return this.post('/api/user/streak/update', {});
+  }
+
+  async getDailyContentProgress() {
+    return this.get('/api/user/daily-progress');
   }
 }
 

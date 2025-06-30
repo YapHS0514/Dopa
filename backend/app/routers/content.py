@@ -164,24 +164,99 @@ async def get_contents(
         transformed_data = []
         for content in response.data:
             media_url = content.get("media_url", "")
+            content_type = content.get("content_type", "text")
             
             # Determine if this is video content based on media_url file extension
             is_video = media_url and any(media_url.lower().endswith(ext) for ext in ['.mp4', '.mov', '.avi', '.webm', '.m4v'])
             
-            transformed_content = {
-                "id": content["id"],
-                "hook": content["title"],  # title -> hook
-                "summary": content["summary"],  # summary -> fullContent for swiping
-                "fullContent": content["summary"],  # Using summary as the swipeable content
-                "image": "" if is_video else media_url,  # Use media_url as image only for non-video content
-                "topic": "general",  # We could enhance this by joining with topics
-                "source": "Database",  # Could be enhanced with actual source name
-                "sourceUrl": content.get("source_url", ""),
-                "readTime": 2,  # Could be calculated or stored
-                "video_url": media_url if is_video else "",  # Use media_url as video_url for video content
-                "tags": [],  # TODO: Add tags support when available in database
-                "contentType": "reel" if is_video else "text"  # Determine content type
-            }
+            # Handle carousel content type
+            if content_type == "carousel":
+                # Fetch carousel slides for this content
+                try:
+                    logger.info(f"🎠 Attempting to fetch slides for carousel content {content['id']}")
+                    # Use admin client to bypass RLS for carousel slides
+                    supabase_admin = get_supabase_admin_client()
+                    slides_response = supabase_admin.table("carousel_slides").select(
+                        "id, image_url, slide_index"
+                    ).eq("content_id", content["id"]).order("slide_index").execute()
+                    
+                    logger.info(f"🎠 Slides response for {content['id']}: {slides_response.data}")
+                    
+                    slides = slides_response.data if slides_response.data else []
+                    logger.info(f"🎠 Fetched {len(slides)} slides for carousel content {content['id']}")
+                    
+                    if slides:
+                        logger.info(f"🎠 Sample slide URLs for {content['id']}: {[slide['image_url'][:80] + '...' for slide in slides[:2]]}")
+                        transformed_content = {
+                            "id": content["id"],
+                            "hook": content["title"],  # title -> hook
+                            "summary": content["summary"],  # Keep summary for metadata
+                            "fullContent": content["summary"],  # Using summary as metadata
+                            "image": "",  # Not used for carousel
+                            "topic": "general",  # We could enhance this by joining with topics
+                            "source": "Database",  # Could be enhanced with actual source name
+                            "sourceUrl": content.get("source_url", ""),
+                            "readTime": 2,  # Could be calculated or stored
+                            "video_url": "",  # Not used for carousel
+                            "tags": [],  # TODO: Add tags support when available in database
+                            "contentType": "carousel",  # New content type
+                            "slides": slides  # Add slides data for carousel
+                        }
+                        logger.info(f"✅ Successfully created carousel content for {content['id']} with {len(slides)} slides")
+                    else:
+                        logger.warning(f"⚠️ No slides found for carousel content {content['id']}, falling back to text")
+                        # Fallback to regular text content if no slides found
+                        transformed_content = {
+                            "id": content["id"],
+                            "hook": content["title"],
+                            "summary": content["summary"],
+                            "fullContent": content["summary"],
+                            "image": "",
+                            "topic": "general",
+                            "source": "Database",
+                            "sourceUrl": content.get("source_url", ""),
+                            "readTime": 2,
+                            "video_url": "",
+                            "tags": [],
+                            "contentType": "text"  # Fallback to text
+                        }
+                except Exception as e:
+                    logger.error(f"❌ Error fetching slides for carousel {content['id']}: {str(e)}")
+                    logger.error(f"❌ Exception type: {type(e)}")
+                    import traceback
+                    logger.error(f"❌ Traceback: {traceback.format_exc()}")
+                    # Fallback to regular text content if slides fetch fails
+                    transformed_content = {
+                        "id": content["id"],
+                        "hook": content["title"],
+                        "summary": content["summary"],
+                        "fullContent": content["summary"],
+                        "image": "",
+                        "topic": "general",
+                        "source": "Database",
+                        "sourceUrl": content.get("source_url", ""),
+                        "readTime": 2,
+                        "video_url": "",
+                        "tags": [],
+                        "contentType": "text"  # Fallback to text
+                    }
+            else:
+                # Handle existing text and reel content types
+                transformed_content = {
+                    "id": content["id"],
+                    "hook": content["title"],  # title -> hook
+                    "summary": content["summary"],  # summary -> fullContent for swiping
+                    "fullContent": content["summary"],  # Using summary as the swipeable content
+                    "image": "" if is_video else media_url,  # Use media_url as image only for non-video content
+                    "topic": "general",  # We could enhance this by joining with topics
+                    "source": "Database",  # Could be enhanced with actual source name
+                    "sourceUrl": content.get("source_url", ""),
+                    "readTime": 2,  # Could be calculated or stored
+                    "video_url": media_url if is_video else "",  # Use media_url as video_url for video content
+                    "tags": [],  # TODO: Add tags support when available in database
+                    "contentType": "reel" if is_video else "text"  # Determine content type
+                }
+            
             transformed_data.append(transformed_content)
         
         return {

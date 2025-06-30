@@ -17,6 +17,7 @@ import { ContentCard } from '../components/ContentCard';
 import ActionButtons from '../components/ActionButtons';
 import { Fact } from '../hooks/useInfiniteContent';
 import { ReelCard } from '../components/ReelCard';
+import { CarouselCard } from '../components/CarouselCard';
 import { Ionicons } from '@expo/vector-icons';
 import { useReelAudioStore, useTTSAudioStore } from '../lib/store';
 import { playCombinedTTS } from '../lib/ttsUtils';
@@ -28,7 +29,12 @@ interface SavedContentViewProps {
   onBack: () => void;
 }
 
-const getContentType = (fact: Fact): 'text' | 'reel' => {
+const getContentType = (fact: Fact): 'text' | 'reel' | 'carousel' => {
+  // Use the contentType from backend if available, otherwise fallback to detection
+  if (fact.contentType) {
+    return fact.contentType;
+  }
+  // Fallback detection
   return fact.video_url ? 'reel' : 'text';
 };
 
@@ -147,6 +153,57 @@ const FactCarousel = ({ fact }: { fact: Fact }) => {
   );
 };
 
+const SavedCarouselContent = ({ fact }: { fact: Fact }) => {
+  // Ensure we have slides data
+  if (!fact.slides || fact.slides.length === 0) {
+    console.warn(
+      `Saved carousel content ${fact.id} has no slides, falling back to text display`
+    );
+    return <FactCarousel fact={fact} />;
+  }
+
+  return (
+    <View style={{ flex: 1 }}>
+      <CarouselCard
+        slides={fact.slides}
+        title={fact.hook}
+        sourceUrl={fact.sourceUrl}
+        tags={fact.tags}
+        contentId={fact.id}
+        onEngagementTracked={(contentId, interactionType, value) => {
+          // Only track interactions that make sense for saved content
+          if (interactionType === 'like' || interactionType === 'save') {
+            console.log(
+              `📱 SavedCarouselContent: ${interactionType} interaction tracked for saved content ${contentId} with value ${value}`
+            );
+          } else {
+            console.log(
+              `📱 SavedCarouselContent: Skipped ${interactionType} tracking for saved content - not applicable`
+            );
+          }
+        }}
+      />
+      {/* Action buttons positioned on the right side */}
+      <ActionButtons
+        fact={{ ...fact, contentType: 'carousel' as const }}
+        style={styles.actionButtons}
+        onInteractionTracked={(contentId, interactionType, value) => {
+          // Only track unlike/unsave interactions for saved content
+          if (interactionType === 'like' || interactionType === 'save') {
+            console.log(
+              `📱 SavedCarouselContent: ${interactionType} interaction tracked for saved content ${contentId} with value ${value}`
+            );
+          } else {
+            console.log(
+              `📱 SavedCarouselContent: Skipped ${interactionType} tracking for saved content - not applicable`
+            );
+          }
+        }}
+      />
+    </View>
+  );
+};
+
 // Component for Reel content
 const ReelContent = ({ fact }: { fact: Fact }) => {
   const reelFact = {
@@ -245,6 +302,8 @@ export default function SavedContentView({
       {/* Content */}
       {contentType === 'reel' ? (
         <ReelContent fact={fact} />
+      ) : contentType === 'carousel' ? (
+        <SavedCarouselContent fact={fact} />
       ) : (
         <FactCarousel fact={fact} />
       )}
