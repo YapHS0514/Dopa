@@ -22,6 +22,7 @@ import StreakButton from '../../components/StreakButton';
 import { useInfiniteContent, Fact } from '../../hooks/useInfiniteContent';
 import { apiClient } from '../../lib/api';
 import { ReelCard } from '../../components/ReelCard';
+import { CarouselCard } from '../../components/CarouselCard';
 import { useReelAudioStore } from '../../lib/store';
 import { useDailyContentTracker } from '../../hooks/useDailyContentTracker';
 import { useStreakData } from '../../hooks/useStreakData';
@@ -29,7 +30,12 @@ import { useStreakData } from '../../hooks/useStreakData';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-const getContentType = (fact: Fact): 'text' | 'reel' => {
+const getContentType = (fact: Fact): 'text' | 'reel' | 'carousel' => {
+  // Use the contentType from backend if available, otherwise fallback to detection
+  if (fact.contentType) {
+    return fact.contentType;
+  }
+  // Fallback detection
   return fact.video_url ? 'reel' : 'text';
 };
 
@@ -218,6 +224,55 @@ const ReelContent = ({
   );
 };
 
+// New component for Carousel content
+const CarouselContent = ({
+  fact,
+  onEngagementTracked,
+  contentEngagementTracked,
+}: {
+  fact: Fact;
+  onEngagementTracked?: (
+    contentId: string,
+    engagementType: string,
+    value: number
+  ) => void;
+  contentEngagementTracked?: React.MutableRefObject<Set<string>>;
+}) => {
+  // Ensure we have slides data
+  if (!fact.slides || fact.slides.length === 0) {
+    console.warn(
+      `🎠 Carousel content ${fact.id} has no slides, falling back to text display`
+    );
+    return (
+      <FactCarousel
+        fact={fact}
+        onEngagementTracked={onEngagementTracked}
+        contentEngagementTracked={contentEngagementTracked}
+      />
+    );
+  }
+
+  return (
+    <View style={{ flex: 1 }}>
+      <CarouselCard
+        slides={fact.slides}
+        title={fact.hook}
+        sourceUrl={fact.sourceUrl}
+        tags={fact.tags}
+        contentId={fact.id}
+        onEngagementTracked={onEngagementTracked}
+        contentEngagementTracked={contentEngagementTracked}
+      />
+      {/* Action buttons positioned on the right side */}
+      <ActionButtons
+        fact={{ ...fact, contentType: 'carousel' as const }}
+        style={styles.actionButtons}
+        onInteractionTracked={onEngagementTracked}
+      />
+    </View>
+  );
+};
+
 export default function IndexScreen() {
   const [factIndex, setFactIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
@@ -370,13 +425,13 @@ export default function IndexScreen() {
         const previousContent = facts[factIndex];
         const contentType = getContentType(previousContent);
 
-        // For text content, check if user skipped without swiping
+        // For text and carousel content, check if user skipped without swiping
         if (
-          contentType === 'text' &&
+          (contentType === 'text' || contentType === 'carousel') &&
           !contentEngagementTracked.current.has(previousContent.id)
         ) {
           console.log(
-            `📖 TextContent ${previousContent.id}: Left without swiping - tracking as skip`
+            `📖 ${contentType}Content ${previousContent.id}: Left without swiping - tracking as skip`
           );
           trackInteraction(previousContent.id, 'skip', -2);
           contentEngagementTracked.current.add(previousContent.id);
@@ -431,6 +486,14 @@ export default function IndexScreen() {
             isVisible={isVisible}
             screenFocused={isFocused}
             onEngagementTracked={trackEngagement}
+          />
+        );
+      } else if (contentType === 'carousel') {
+        return (
+          <CarouselContent
+            fact={item}
+            onEngagementTracked={trackEngagement}
+            contentEngagementTracked={contentEngagementTracked}
           />
         );
       } else {
@@ -580,7 +643,7 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: '#000',
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 20 : 50,
-    paddingBottom: 25,
+    paddingBottom: 15,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 50,

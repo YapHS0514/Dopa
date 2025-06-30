@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from typing import List, Dict, Any, Optional
 import logging
 from ..schemas.user import User
@@ -84,9 +84,9 @@ async def get_user_streak(user: User = Depends(get_current_user)):
         current_streak = profile_response.data.get("streak_days", 0)
         last_streak_date = profile_response.data.get("last_streak_date")
         
-        # Check if today is completed
-        today = date.today().isoformat()
-        today_completed = last_streak_date == today
+        # Check if today is completed (using UTC)
+        today_utc = datetime.now(timezone.utc).date().isoformat()
+        today_completed = last_streak_date == today_utc
         
         # Get daily progress to see if user can earn streak today
         progress_data = await get_daily_progress(user)
@@ -302,18 +302,26 @@ async def get_daily_progress(user: User = Depends(get_current_user)):
     try:
         supabase = get_supabase_client()
         
-        # Get today's date
-        today = date.today().isoformat()
+        # Get today's date in UTC (to match Supabase timestamp storage)
+        today_utc = datetime.now(timezone.utc).date().isoformat()
+        logger.info(f"📅 Checking daily progress for user {user.id} on UTC date: {today_utc}")
         
         # Count unique content interactions for today (any type of interaction counts)
+        # Use UTC timezone to match how Supabase stores timestamps
         interactions_response = supabase.table("user_interactions").select(
-            "content_id"
-        ).eq("user_id", user.id).gte("created_at", f"{today}T00:00:00").execute()
+            "content_id, interaction_type, created_at"
+        ).eq("user_id", user.id).gte("created_at", f"{today_utc}T00:00:00Z").execute()
+        
+        logger.info(f"🔍 Found {len(interactions_response.data) if interactions_response.data else 0} total interactions for user {user.id} today")
+        if interactions_response.data:
+            logger.info(f"📋 Sample interactions: {interactions_response.data[:3]}")
         
         # Count unique content pieces interacted with today
         unique_content_today = len(set([
             interaction["content_id"] for interaction in interactions_response.data
         ])) if interactions_response.data else 0
+        
+        logger.info(f"📊 Unique content pieces consumed today: {unique_content_today}")
         
         # Check if streak threshold is met (4 unique content pieces)
         streak_threshold_met = unique_content_today >= 4
@@ -324,10 +332,10 @@ async def get_daily_progress(user: User = Depends(get_current_user)):
         ).eq("user_id", user.id).single().execute()
         
         last_streak_date = profile_response.data.get("last_streak_date") if profile_response.data else None
-        already_credited_today = last_streak_date == today
+        already_credited_today = last_streak_date == today_utc
         
         return {
-            "date": today,
+            "date": today_utc,
             "unique_content_consumed": unique_content_today,
             "threshold_required": 4,
             "threshold_met": streak_threshold_met,
@@ -344,7 +352,7 @@ async def update_daily_streak(user: User = Depends(get_current_user)):
     """Update user's streak when they complete daily content goal"""
     try:
         supabase = get_supabase_client()
-        today = date.today().isoformat()
+        today_utc = datetime.now(timezone.utc).date().isoformat()
         
         # First check if user has met the daily threshold
         progress_data = await get_daily_progress(user)
@@ -374,13 +382,13 @@ async def update_daily_streak(user: User = Depends(get_current_user)):
         current_streak = profile_response.data.get("streak_days", 0)
         last_streak_date = profile_response.data.get("last_streak_date")
         
-        # Calculate new streak
-        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        # Calculate new streak using UTC dates
+        yesterday_utc = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
         
-        if last_streak_date == yesterday:
+        if last_streak_date == yesterday_utc:
             # Consecutive day - increment streak
             new_streak = current_streak + 1
-        elif last_streak_date == today:
+        elif last_streak_date == today_utc:
             # Already credited today (shouldn't happen due to check above)
             return {
                 "success": False,
@@ -394,7 +402,7 @@ async def update_daily_streak(user: User = Depends(get_current_user)):
         # Update profile with new streak
         update_response = supabase.table("profiles").update({
             "streak_days": new_streak,
-            "last_streak_date": today
+            "last_streak_date": today_utc
         }).eq("user_id", user.id).execute()
         
         if not update_response.data:

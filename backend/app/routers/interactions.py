@@ -13,6 +13,10 @@ async def record_interaction(
 ):
     """Record user interaction with content"""
     try:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"🎯 Recording interaction for user {user.id}: {interaction.interaction_type} on content {interaction.content_id} with value {interaction.interaction_value}")
+        
         supabase = get_supabase_client()
         
         # Check if this exact interaction already exists (to prevent duplicates)
@@ -40,6 +44,11 @@ async def record_interaction(
             "interaction_type": interaction.interaction_type,
             "interaction_value": interaction.interaction_value
         }).execute()
+        
+        if response.data:
+            logger.info(f"✅ Successfully recorded interaction: {response.data[0]}")
+        else:
+            logger.error(f"❌ Failed to record interaction - no data returned")
         
         return {"data": response.data[0], "message": "Interaction recorded successfully"}
     except Exception as e:
