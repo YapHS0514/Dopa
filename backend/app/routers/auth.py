@@ -12,8 +12,30 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 @router.post("/signup", response_model=UserResponse)
 async def signup(user_data: UserCreate):
     try:
+        # Validate username
+        username = user_data.username.strip()
+        if not username:
+            raise HTTPException(status_code=400, detail="Username cannot be empty")
+        
+        if len(username) < 2:
+            raise HTTPException(status_code=400, detail="Username must be at least 2 characters long")
+        
+        if len(username) > 50:
+            raise HTTPException(status_code=400, detail="Username must be less than 50 characters")
+        
         supabase = get_supabase_client()
         supabase_admin = get_supabase_admin_client()
+        
+        # Check if username is already taken before creating auth user
+        try:
+            existing_username = supabase_admin.table("profiles").select("user_id").eq("full_name", username).execute()
+            if existing_username.data and len(existing_username.data) > 0:
+                raise HTTPException(status_code=409, detail="This username is already taken. Please choose a different one.")
+        except HTTPException as he:
+            raise he
+        except Exception as e:
+            logger.error(f"Error checking username availability: {str(e)}")
+            # Continue with signup even if username check fails
         
         # Create auth user
         try:
@@ -43,22 +65,31 @@ async def signup(user_data: UserCreate):
             profile_data = {
                 "user_id": user.id,
                 "email": user_data.email,
+                "full_name": username,
                 "onboarding_completed": False,
                 "streak_days": 0,
+                "total_coins": 0,  # Changed from "coins" to "total_coins"
                 "last_active": "now()"
             }
+            
+            logger.info(f"Attempting to create profile with data: {profile_data}")
             
             # Use admin client for profile creation
             profile_response = supabase_admin.table("profiles").insert(profile_data).execute()
             
+            logger.info(f"Profile creation response: {profile_response}")
+            
             if not profile_response.data or len(profile_response.data) == 0:
                 # Rollback auth user creation if profile creation fails
-                logger.error(f"Failed to create profile for user {user.id}")
-                # Use non-async delete_user since it's not an async function
-                supabase_admin.auth.admin.delete_user(user.id)
+                logger.error(f"Failed to create profile for user {user.id} - No data returned")
+                logger.error(f"Profile response: {profile_response}")
+                try:
+                    supabase_admin.auth.admin.delete_user(user.id)
+                except Exception as rollback_error:
+                    logger.error(f"Failed to rollback auth user: {str(rollback_error)}")
                 raise HTTPException(status_code=400, detail="Failed to create user profile")
                 
-            logger.info(f"Successfully created profile for user: {user.id}")
+            logger.info(f"Successfully created profile for user: {user.id} with username: {username}")
             
             return {
                 "id": user.id,
@@ -67,14 +98,26 @@ async def signup(user_data: UserCreate):
             }
             
         except Exception as e:
+            error_str = str(e).lower()
+            logger.error(f"Profile creation exception: {e}")
+            logger.error(f"Exception type: {type(e)}")
+            
+            # Check for unique constraint violation on username
+            if "unique" in error_str or "duplicate" in error_str or "already exists" in error_str:
+                logger.warning(f"Username '{username}' already taken during profile creation for user {user.id}")
+                try:
+                    supabase_admin.auth.admin.delete_user(user.id)
+                except Exception as rollback_error:
+                    logger.error(f"Failed to rollback auth user: {str(rollback_error)}")
+                raise HTTPException(status_code=409, detail="This username is already taken. Please choose a different one.")
+            
             # If profile creation fails, attempt to rollback auth user
             logger.error(f"Error creating profile, attempting to rollback auth user: {str(e)}")
             try:
-                # Use non-async delete_user since it's not an async function
                 supabase_admin.auth.admin.delete_user(user.id)
             except Exception as rollback_error:
                 logger.error(f"Failed to rollback auth user: {str(rollback_error)}")
-            raise HTTPException(status_code=400, detail="Failed to create user profile")
+            raise HTTPException(status_code=400, detail=f"Failed to create user profile: {str(e)}")
             
     except HTTPException as he:
         raise he
@@ -131,6 +174,7 @@ async def signin(user_data: UserSignIn):
                 "onboarding_completed": False,
                 "total_points": 0,
                 "streak_days": 0,
+                "total_coins": 0,
                 "last_active": "now()"
             }
             

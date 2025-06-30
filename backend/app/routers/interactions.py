@@ -24,11 +24,11 @@ async def record_interaction(
             "interaction_type", interaction.interaction_type
         ).execute()
         
-        # For view interactions, allow multiple records but limit to prevent spam
-        if interaction.interaction_type == "view":
-            # Allow multiple view records but limit to reasonable amount per content
-            if existing_response.data and len(existing_response.data) >= 5:
-                return {"message": "View already recorded (limit reached)", "duplicate": True}
+        # Handle different interaction types with appropriate duplicate prevention
+        if interaction.interaction_type in ["view", "skip", "partial", "interested", "engaged"]:
+            # For engagement interactions, allow multiple records but limit to prevent spam
+            if existing_response.data and len(existing_response.data) >= 3:
+                return {"message": f"{interaction.interaction_type.title()} interaction already recorded (limit reached)", "duplicate": True}
         else:
             # For other interactions (like, save, etc.), prevent exact duplicates
             if existing_response.data:
@@ -58,7 +58,11 @@ async def get_user_stats(user: User = Depends(get_current_user)):
             "total_interactions": len(interactions),
             "likes_count": len([i for i in interactions if i["interaction_type"] == "like"]),
             "saves_count": len([i for i in interactions if i["interaction_type"] == "save"]),
-            "views_count": len([i for i in interactions if i["interaction_type"] == "view"])
+            "views_count": len([i for i in interactions if i["interaction_type"] == "view"]),
+            "skip_count": len([i for i in interactions if i["interaction_type"] == "skip"]),
+            "partial_count": len([i for i in interactions if i["interaction_type"] == "partial"]),
+            "interested_count": len([i for i in interactions if i["interaction_type"] == "interested"]),
+            "engaged_count": len([i for i in interactions if i["interaction_type"] == "engaged"])
         }
         
         return {"data": stats}

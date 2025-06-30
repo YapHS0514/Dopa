@@ -63,7 +63,9 @@ interface ReelAudioState {
   getCurrentlyPlaying: () => string | null;
   registerVideoRef: (contentId: string, ref: any) => void;
   unregisterVideoRef: (contentId: string) => void;
-  unloadPreviousVideo: (newContentId: string) => Promise<void>;
+  pausePreviousVideo: (newContentId: string) => Promise<void>;
+  pauseAllVideos: () => Promise<void>;
+  // clearAllVideoRefs: () => void;
 }
 
 export const useReelAudioStore = create<ReelAudioState>((set, get) => ({
@@ -133,21 +135,45 @@ export const useReelAudioStore = create<ReelAudioState>((set, get) => ({
     console.log(`🔧 Store: Unregistered video ref for ${contentId}`);
   },
   
-  unloadPreviousVideo: async (newContentId: string) => {
+  pausePreviousVideo: async (newContentId: string) => {
     const state = get();
     const previousId = state.currentlyPlayingId;
     
     if (previousId && previousId !== newContentId && state.videoRefs[previousId]) {
-      console.log(`🔄 Store: Unloading previous video ${previousId} for new video ${newContentId}`);
+      console.log(`⏸️ Store: Pausing previous video ${previousId} for new video ${newContentId}`);
       try {
         const previousRef = state.videoRefs[previousId];
         await previousRef.pauseAsync();
-        await previousRef.setIsMutedAsync(true);
-        await previousRef.unloadAsync();
-        console.log(`✅ Store: Successfully unloaded ${previousId}`);
+        console.log(`✅ Store: Successfully paused ${previousId}`);
       } catch (error) {
-        console.error(`❌ Store: Error unloading ${previousId}:`, error);
+        console.error(`❌ Store: Error pausing ${previousId}:`, error);
       }
     }
   },
+  
+  pauseAllVideos: async () => {
+    const state = get();
+    console.log(`⏸️ Store: Pausing all videos due to navigation`);
+    
+    // Pause all registered video refs
+    const pausePromises = Object.entries(state.videoRefs).map(async ([contentId, videoRef]) => {
+      try {
+        await videoRef.pauseAsync();
+        console.log(`✅ Store: Paused video ${contentId}`);
+      } catch (error) {
+        console.error(`❌ Store: Error pausing video ${contentId}:`, error);
+      }
+    });
+    
+    await Promise.all(pausePromises);
+    
+    // Clear currently playing
+    set({ currentlyPlayingId: null });
+    console.log(`✅ Store: All videos paused`);
+  },
+
+  // clearAllVideoRefs: () => {
+  //   set({ videoRefs: {}, currentlyPlayingId: null });
+  //   console.log(`🧹 Store: Cleared all video refs for fresh start`);
+  // },
 })); 

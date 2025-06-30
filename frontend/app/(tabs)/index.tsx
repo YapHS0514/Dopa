@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { Colors } from '../../constants/Colors';
 import { ContentCard } from '../../components/ContentCard';
 import ActionButtons from '../../components/ActionButtons';
@@ -21,6 +22,10 @@ import StreakButton from '../../components/StreakButton';
 import { useInfiniteContent, Fact } from '../../hooks/useInfiniteContent';
 import { apiClient } from '../../lib/api';
 import { ReelCard } from '../../components/ReelCard';
+import { useReelAudioStore } from '../../lib/store';
+import { useDailyContentTracker } from '../../hooks/useDailyContentTracker';
+import { useStreakData } from '../../hooks/useStreakData';
+// StreakCelebrationModal moved to streaks.tsx
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -69,9 +74,23 @@ const getFactCards = (fact: Fact) => {
   return cards;
 };
 
-const FactCarousel = ({ fact }: { fact: Fact }) => {
+const FactCarousel = ({
+  fact,
+  onEngagementTracked,
+  contentEngagementTracked,
+}: {
+  fact: Fact;
+  onEngagementTracked?: (
+    contentId: string,
+    engagementType: string,
+    value: number
+  ) => void;
+  contentEngagementTracked?: React.MutableRefObject<Set<string>>;
+}) => {
   const cards = getFactCards(fact);
   const [cardIndex, setCardIndex] = useState(0);
+  const hasTrackedInterested = useRef(false);
+  const hasTrackedEngaged = useRef(false);
 
   return (
     <View style={{ flex: 1 }}>
@@ -118,12 +137,35 @@ const FactCarousel = ({ fact }: { fact: Fact }) => {
         onMomentumScrollEnd={(e) => {
           const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
           setCardIndex(idx);
+
+          // Track engagement based on swipe behavior
+          if (idx > 0 && !hasTrackedInterested.current) {
+            // User swiped at least once - "INTERESTED"
+            console.log(
+              `📖 TextContent ${fact.id}: Swiped to card ${idx} - tracking as interested`
+            );
+            hasTrackedInterested.current = true;
+            contentEngagementTracked?.current.add(fact.id);
+            onEngagementTracked?.(fact.id, 'interested', 1);
+          }
+
+          // Check if user reached the source card (last card) - "ENGAGED"
+          const isSourceCard = cards[idx]?.isSourceCard;
+          if (isSourceCard && !hasTrackedEngaged.current) {
+            console.log(
+              `📖 TextContent ${fact.id}: Reached source card - tracking as engaged`
+            );
+            hasTrackedEngaged.current = true;
+            contentEngagementTracked?.current.add(fact.id);
+            onEngagementTracked?.(fact.id, 'engaged', 2);
+          }
         }}
       />
       {/* Action buttons positioned on the right side */}
       <ActionButtons
         fact={{ ...fact, contentType: 'text' as const }}
         style={styles.actionButtons}
+        onInteractionTracked={onEngagementTracked}
       />
     </View>
   );
@@ -133,9 +175,17 @@ const FactCarousel = ({ fact }: { fact: Fact }) => {
 const ReelContent = ({
   fact,
   isVisible,
+  screenFocused,
+  onEngagementTracked,
 }: {
   fact: Fact;
   isVisible: boolean;
+  screenFocused: boolean;
+  onEngagementTracked?: (
+    contentId: string,
+    engagementType: string,
+    value: number
+  ) => void;
 }) => {
   // Ensure the fact object has the correct contentType for ActionButtons
   const reelFact = {
@@ -149,16 +199,21 @@ const ReelContent = ({
         videoUrl={fact.video_url!}
         title={fact.hook}
         tags={fact.tags}
-        isVisible={isVisible}
+        isVisible={isVisible && screenFocused} // Only visible if both conditions are true
         contentId={fact.id}
         onLoadStart={() => console.log(`Loading reel: ${fact.id}`)}
         onLoad={() => console.log(`Reel loaded: ${fact.id}`)}
         onError={(error: string) =>
           console.error(`Reel error for ${fact.id}:`, error)
         }
+        onEngagementTracked={onEngagementTracked}
       />
       {/* Action buttons for reels with correct contentType */}
-      <ActionButtons fact={reelFact} style={styles.reelActionButtons} />
+      <ActionButtons
+        fact={reelFact}
+        style={styles.reelActionButtons}
+        onInteractionTracked={onEngagementTracked}
+      />
     </View>
   );
 };
@@ -167,6 +222,27 @@ export default function IndexScreen() {
   const [factIndex, setFactIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const lastTrackedContentId = useRef<string | null>(null);
+  const celebrationTriggered = useRef<boolean>(false); // Still used to prevent multiple notifications
+
+  // Navigation focus detection
+  const isFocused = useIsFocused();
+  const { pauseAllVideos } = useReelAudioStore();
+
+  // Daily content tracking and streak system
+  const { progress, initializeDaily, trackContentInteraction } =
+    useDailyContentTracker();
+
+  const {
+    currentStreak,
+    fetchStreakData,
+    setStreakNotification,
+    hasUnseenStreakNotification,
+  } = useStreakData();
+
+  // Debug notification state
+  useEffect(() => {
+    console.log(`🔔 Streak notification state: ${hasUnseenStreakNotification}`);
+  }, [hasUnseenStreakNotification]);
 
   // Use the new infinite content hook
   const {
@@ -179,8 +255,104 @@ export default function IndexScreen() {
     trackInteraction,
   } = useInfiniteContent();
 
-  // TODO: Fetch user data from backend to get current streak
-  const currentStreak = 7; // Placeholder - replace with actual backend data
+  // Pause all videos when screen loses focus
+  useEffect(() => {
+    if (!isFocused) {
+      console.log('📱 IndexScreen: Screen lost focus, pausing all videos');
+      pauseAllVideos();
+    } else {
+      console.log('📱 IndexScreen: Screen gained focus');
+    }
+  }, [isFocused, pauseAllVideos]);
+
+  // Initialize daily content tracking on mount
+  useEffect(() => {
+    initializeDaily();
+    fetchStreakData().catch(console.error); // Handle potential promise rejection
+    // Reset celebration trigger flag on mount
+    celebrationTriggered.current = false;
+
+    // Debug: Log celebration history on mount
+    const checkCelebrationHistory = async () => {
+      const { default: AsyncStorage } = await import(
+        '@react-native-async-storage/async-storage'
+      );
+      const lastCelebration = await AsyncStorage.getItem(
+        'lastStreakCelebration'
+      );
+      console.log(
+        `🎯 DEBUG: Last celebration date on mount: ${lastCelebration || 'null'}`
+      );
+
+      // UNCOMMENT THIS LINE TO FORCE CLEAR CELEBRATION HISTORY FOR NEW ACCOUNTS:
+      // if (lastCelebration) {
+      //   console.log('🧹 Force clearing celebration history for new account');
+      //   clearCelebrationHistory();
+      // }
+    };
+    checkCelebrationHistory();
+  }, [initializeDaily, fetchStreakData]);
+
+  // StreakButton now handles its own data fetching
+
+  // Track content engagement per item
+  const contentEngagementTracked = useRef<Set<string>>(new Set());
+
+  // Enhanced track interaction that also marks content as tracked and handles daily streak progress
+  const trackEngagement = useCallback(
+    async (contentId: string, engagementType: string, value: number) => {
+      contentEngagementTracked.current.add(contentId);
+
+      // Track the interaction for recommendation engine
+      trackInteraction(contentId, engagementType, value);
+
+      // Track content consumption for daily streak system
+      try {
+        const trackingResult = await trackContentInteraction(contentId);
+        console.log('🎯 Daily tracking result:', trackingResult);
+
+        // Set notification when streak is earned or threshold reached
+        if (
+          (trackingResult.streakEarned || trackingResult.isNewThreshold) &&
+          !celebrationTriggered.current
+        ) {
+          console.log(
+            '🔔 Daily streak threshold reached! Setting notification...'
+          );
+          console.log(`   • Streak earned: ${trackingResult.streakEarned}`);
+          console.log(`   • New threshold: ${trackingResult.isNewThreshold}`);
+
+          // Mark as handled to prevent multiple notifications
+          celebrationTriggered.current = true;
+
+          // Fetch updated streak data
+          const updatedStreakData = await fetchStreakData();
+
+          // Set notification for user to see on streak button
+          if (
+            updatedStreakData.currentStreak > 0 ||
+            trackingResult.isNewThreshold
+          ) {
+            const streakToShow = Math.max(1, updatedStreakData.currentStreak);
+            console.log(
+              `🔔 Setting streak notification for ${streakToShow} days`
+            );
+            setStreakNotification(true, streakToShow);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error tracking daily content:', error);
+      }
+    },
+    [
+      trackInteraction,
+      trackContentInteraction,
+      fetchStreakData,
+      setStreakNotification,
+    ]
+  );
+
+  // No longer needed - celebration modal moved to streaks.tsx
 
   // Handle scroll events for infinite loading
   const handleScroll = useCallback(
@@ -193,17 +365,27 @@ export default function IndexScreen() {
         console.log(`Scroll: moved to item ${currentIndex}/${facts.length}`);
       }
 
-      // Track view when user switches to a new fact
-      if (currentIndex !== factIndex && facts[currentIndex]) {
-        const currentContentId = facts[currentIndex].id;
+      // Handle engagement tracking when leaving content
+      if (currentIndex !== factIndex && facts[factIndex]) {
+        const previousContent = facts[factIndex];
+        const contentType = getContentType(previousContent);
 
-        // Only track if we haven't already tracked this content
-        if (lastTrackedContentId.current !== currentContentId) {
-          setFactIndex(currentIndex);
-          lastTrackedContentId.current = currentContentId;
-          // Track content view
-          trackInteraction(currentContentId, 'view', 1);
+        // For text content, check if user skipped without swiping
+        if (
+          contentType === 'text' &&
+          !contentEngagementTracked.current.has(previousContent.id)
+        ) {
+          console.log(
+            `📖 TextContent ${previousContent.id}: Left without swiping - tracking as skip`
+          );
+          trackInteraction(previousContent.id, 'skip', -2);
+          contentEngagementTracked.current.add(previousContent.id);
         }
+      }
+
+      // Update current index (engagement tracking is handled by individual components)
+      if (currentIndex !== factIndex) {
+        setFactIndex(currentIndex);
       }
 
       // More aggressive loading: load when at 2nd item from end OR when at 3rd item
@@ -243,12 +425,25 @@ export default function IndexScreen() {
       const isVisible = index === factIndex;
 
       if (contentType === 'reel') {
-        return <ReelContent fact={item} isVisible={isVisible} />;
+        return (
+          <ReelContent
+            fact={item}
+            isVisible={isVisible}
+            screenFocused={isFocused}
+            onEngagementTracked={trackEngagement}
+          />
+        );
       } else {
-        return <FactCarousel fact={item} />;
+        return (
+          <FactCarousel
+            fact={item}
+            onEngagementTracked={trackEngagement}
+            contentEngagementTracked={contentEngagementTracked}
+          />
+        );
       }
     },
-    [factIndex]
+    [factIndex, isFocused, trackEngagement]
   );
 
   const keyExtractor = useCallback((item: Fact) => item.id, []);
@@ -278,7 +473,17 @@ export default function IndexScreen() {
           />
         </TouchableOpacity>
         <Text style={styles.headerText}>DOPA</Text>
-        <StreakButton streakCount={currentStreak} />
+
+        {/* Daily Progress Indicator */}
+        {progress.current > 0 && progress.current < progress.threshold && (
+          <View style={styles.progressContainer}>
+            <Text style={styles.progressText}>
+              {progress.current}/{progress.threshold} today 📚
+            </Text>
+          </View>
+        )}
+
+        <StreakButton />
       </View>
       {loading && facts.length === 0 ? (
         <View style={styles.loadingContainer}>
@@ -320,11 +525,34 @@ export default function IndexScreen() {
           onScroll={handleScroll}
           onMomentumScrollEnd={handleMomentumScrollEnd}
           scrollEventThrottle={16}
-          removeClippedSubviews={true}
-          maxToRenderPerBatch={3}
-          windowSize={5}
-          initialNumToRender={2}
-          updateCellsBatchingPeriod={50}
+          removeClippedSubviews={false} // Keep videos in memory for better performance
+          maxToRenderPerBatch={4} // Increased for better batch handling
+          windowSize={7} // Larger window to keep more components mounted and reduce unmount/remount cycles
+          initialNumToRender={3} // Start with more items
+          updateCellsBatchingPeriod={100} // Faster updates for better responsiveness
+          decelerationRate="fast" // Better snap-to behavior
+          maintainVisibleContentPosition={{
+            minIndexForVisible: 0,
+            autoscrollToTopThreshold: 10,
+          }} // Help maintain position during re-renders
+          onScrollToIndexFailed={(info) => {
+            // Handle failed scroll - fallback to offset
+            const wait = new Promise((resolve) => setTimeout(resolve, 500));
+            wait.then(() => {
+              flatListRef.current?.scrollToOffset({
+                offset: info.index * SCREEN_HEIGHT,
+                animated: false,
+              });
+            });
+          }}
+          onEndReached={() => {
+            // Backup infinite scroll trigger
+            if (hasMore && !loading) {
+              console.log('🔄 onEndReached: Loading more content');
+              loadMoreContent();
+            }
+          }}
+          onEndReachedThreshold={0.3} // Trigger earlier for better UX
         />
       )}
 
@@ -334,6 +562,8 @@ export default function IndexScreen() {
           <ActivityIndicator size="small" color={Colors.tint} />
         </View>
       )}
+
+      {/* Streak celebration modal moved to streaks.tsx */}
     </SafeAreaView>
   );
 }
@@ -443,5 +673,20 @@ const styles = StyleSheet.create({
     right: 15,
     bottom: 200,
     zIndex: 10,
+  },
+  progressContainer: {
+    position: 'absolute',
+    top: Platform.OS === 'android' ? (StatusBar.currentHeight || 20) + 95 : 143,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  progressText: {
+    color: '#fff',
+    fontSize: 12,
+    fontFamily: 'SF-Pro-Display',
+    opacity: 0.8,
   },
 });

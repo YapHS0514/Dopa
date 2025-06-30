@@ -17,29 +17,49 @@ import { useReelAudioStore } from '../lib/store';
 interface ActionButtonsProps {
   fact?: any; // TODO: Replace with proper Fact type from backend
   style?: any;
+  onInteractionTracked?: (
+    contentId: string,
+    interactionType: string,
+    value: number
+  ) => void;
 }
 
-export default function ActionButtons({ fact, style }: ActionButtonsProps) {
+export default function ActionButtons({
+  fact,
+  style,
+  onInteractionTracked,
+}: ActionButtonsProps) {
   const [liked, setLiked] = useState(false);
   const [listening, setListening] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
-  
+
   // Use the saved content context for efficient checking
-  const { isContentSaved, addSavedContent, removeSavedContent, getSavedItemId } = useSavedContent();
-  
+  const {
+    isContentSaved,
+    addSavedContent,
+    removeSavedContent,
+    getSavedItemId,
+  } = useSavedContent();
+
   // Use clean Reel audio store
-  const { isManuallyMuted, toggleMute: toggleReelMute, getCurrentlyPlaying } = useReelAudioStore();
-  
+  const {
+    isManuallyMuted,
+    toggleMute: toggleReelMute,
+    getCurrentlyPlaying,
+  } = useReelAudioStore();
+
   // Get saved status immediately from context - no API calls needed!
   const saved = fact?.id ? isContentSaved(fact.id) : false;
-  
+
   // Determine content type and audio state
   const isReel = fact?.contentType === 'reel' || fact?.video_url;
   const isCurrentReel = getCurrentlyPlaying() === fact?.id;
   const reelIsManuallyMuted = fact?.id ? isManuallyMuted(fact.id) : false;
-  
+
   // Debug logging
-  console.log(`🎬 ActionButtons - ID: ${fact?.id}, Type: ${fact?.contentType}, Is Reel: ${isReel}, Is Current: ${isCurrentReel}, Manually Muted: ${reelIsManuallyMuted}`);
+  console.log(
+    `🎬 ActionButtons - ID: ${fact?.id}, Type: ${fact?.contentType}, Is Reel: ${isReel}, Is Current: ${isCurrentReel}, Manually Muted: ${reelIsManuallyMuted}`
+  );
 
   const likeAnim = useRef(new Animated.Value(1)).current;
   const listenAnim = useRef(new Animated.Value(1)).current;
@@ -61,9 +81,17 @@ export default function ActionButtons({ fact, style }: ActionButtonsProps) {
 
   const handleLike = () => {
     animatePress(likeAnim);
-    setLiked((l) => !l);
-    // TODO: Send like status to backend API
-    // Example: await api.likeFact(fact.id, !liked)
+    const newLikedState = !liked;
+    setLiked(newLikedState);
+
+    // Track like interaction
+    if (fact?.id && newLikedState) {
+      console.log(`❤️ ActionButtons: Like tracked for ${fact.id}`);
+      onInteractionTracked?.(fact.id, 'like', 10); // +10 points for like
+    }
+
+    // TODO: Send like status to backend API for persistence
+    // Example: await api.likeFact(fact.id, newLikedState)
   };
 
   const [isSavingContent, setIsSavingContent] = useState(false);
@@ -88,29 +116,38 @@ export default function ActionButtons({ fact, style }: ActionButtonsProps) {
         // Save the content
         console.log('Saving content:', fact.id);
         const response = (await apiClient.saveContent(fact.id)) as {
+          data?: { id: string }; // The saved record with its ID
           message: string;
           saved_count: number;
           max_saves: number;
-          saved_id?: string; // The ID of the newly created saved record
         };
 
-        // Extract saved_id from response or use a placeholder
-        const savedId = response.saved_id || `temp_${Date.now()}`;
-        
+        // Extract saved_id from response data or use a placeholder as fallback
+        const savedId = response.data?.id || `temp_${Date.now()}`;
+
         // Update context immediately for instant UI feedback
         addSavedContent(fact.id, savedId);
-        console.log(`Saved! ${response.message} (${response.saved_count}/${response.max_saves})`);
+        console.log(
+          `Saved! ${response.message} (${response.saved_count}/${response.max_saves})`
+        );
+
+        // Log the extracted saved ID for debugging
+        console.log(`Extracted saved ID: ${savedId}`);
+
+        // Track save interaction
+        console.log(`💾 ActionButtons: Save tracked for ${fact.id}`);
+        onInteractionTracked?.(fact.id, 'save', 5); // +5 points for save
       } else {
         // Unsave the content - now we can do this efficiently!
         console.log('Unsaving content:', fact.id);
-        
+
         // Get the saved item ID from our cached context (no API call needed!)
         const savedItemId = getSavedItemId(fact.id);
-        
+
         if (savedItemId) {
           // Remove from backend
           await apiClient.removeSavedContent(savedItemId);
-          
+
           // Update context immediately for instant UI feedback
           removeSavedContent(fact.id);
           console.log('Content removed from saved list');
@@ -141,8 +178,16 @@ export default function ActionButtons({ fact, style }: ActionButtonsProps) {
         // Revert the optimistic update for other errors
         if (saved) {
           // Was trying to unsave, revert by adding back
-          const savedId = getSavedItemId(fact.id) || `temp_${Date.now()}`;
-          addSavedContent(fact.id, savedId);
+          const savedId = getSavedItemId(fact.id);
+          if (savedId) {
+            addSavedContent(fact.id, savedId);
+          } else {
+            console.warn(
+              'Cannot revert unsave operation - no saved ID available. Content may appear unsaved until next refresh.'
+            );
+            // Don't add back to saved state without a proper ID to avoid future UUID errors
+            // The saved content context will be refreshed on next app load to sync with backend
+          }
         } else {
           // Was trying to save, revert by removing
           removeSavedContent(fact.id);
@@ -157,14 +202,20 @@ export default function ActionButtons({ fact, style }: ActionButtonsProps) {
 
   const handleListen = async () => {
     animatePress(listenAnim);
-    
+
     if (isReel) {
       // For Any Reel: Allow mute/unmute (not just current)
       if (fact?.id) {
-        console.log(`🔊 Toggling mute for reel ${fact.id}, currently manually muted: ${reelIsManuallyMuted}, is current: ${isCurrentReel}`);
+        console.log(
+          `🔊 Toggling mute for reel ${fact.id}, currently manually muted: ${reelIsManuallyMuted}, is current: ${isCurrentReel}`
+        );
         const newMutedState = toggleReelMute(fact.id);
-        console.log(`🔊 Reel ${fact.id} manual mute toggled: ${newMutedState ? 'muted' : 'unmuted'}`);
-        
+        console.log(
+          `🔊 Reel ${fact.id} manual mute toggled: ${
+            newMutedState ? 'muted' : 'unmuted'
+          }`
+        );
+
         // The ReelCard component will automatically update its video
         // since it subscribes to the Zustand store
       }
@@ -172,8 +223,11 @@ export default function ActionButtons({ fact, style }: ActionButtonsProps) {
       // For Text/Image content: Handle voiceover
       if (!listening) {
         // TODO: Play voiceover using ElevenLabs (not implemented yet)
-        console.log('TODO: Play voiceover using ElevenLabs for text content:', fact?.id);
-        
+        console.log(
+          'TODO: Play voiceover using ElevenLabs for text content:',
+          fact?.id
+        );
+
         // Placeholder implementation with local audio for now
         const { status } = await Audio.requestPermissionsAsync();
         if (status !== 'granted') {
@@ -233,15 +287,15 @@ export default function ActionButtons({ fact, style }: ActionButtonsProps) {
           {isReel ? (
             // Use Lucide icons for All Reels - show manual mute preference
             reelIsManuallyMuted ? (
-              <VolumeX 
-                size={32} 
-                color={isCurrentReel ? "#ff6b6b" : "#ff9999"} 
+              <VolumeX
+                size={32}
+                color={isCurrentReel ? '#ff6b6b' : '#ff9999'}
                 strokeWidth={2}
               />
             ) : (
-              <Volume2 
-                size={32} 
-                color={isCurrentReel ? "#00ff88" : "#88ffaa"} 
+              <Volume2
+                size={32}
+                color={isCurrentReel ? '#00ff88' : '#88ffaa'}
                 strokeWidth={2}
               />
             )

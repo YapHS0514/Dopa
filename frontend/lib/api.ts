@@ -42,6 +42,16 @@ interface UserProfile {
   updated_at: string;
 }
 
+export interface UserProfileResponse {
+  id: string;
+  email: string;
+  full_name?: string;
+  avatar_url?: string;
+  streak_days: number;
+  total_coins: number;
+  onboarding_completed: boolean;
+}
+
 interface UserResponse {
   id: string;
   email: string;
@@ -187,6 +197,18 @@ class ApiClient {
     return this.delete(`/api/saved/${savedContentId}`);
   }
 
+  async getUserCoins() {
+    return this.get('/api/user/coins');
+  }
+
+  async addUserCoins(amount: number, reason: string) {
+    return this.post('/api/user/coins/add', { amount, reason });
+  }
+
+  async spendUserCoins(amount: number, reason: string) {
+    return this.post('/api/user/coins/spend', { amount, reason });
+  }
+
   async getRecommendations(limit = 10) {
     return this.get(`/api/recommendations?limit=${limit}`);
   }
@@ -204,8 +226,8 @@ class ApiClient {
   }
 
   // ✅ Auth-related methods (from your friend's version)
-  async signUp(email: string, password: string): Promise<UserResponse> {
-    return this.post('/api/auth/signup', { email, password });
+  async signUp(email: string, password: string, username: string): Promise<UserResponse> {
+    return this.post('/api/auth/signup', { email, password, username });
   }
 
   async signIn(email: string, password: string): Promise<UserResponse> {
@@ -220,8 +242,33 @@ class ApiClient {
     return this.get('/api/auth/profile');
   }
 
+  async getUserProfile(): Promise<UserProfileResponse> {
+    return this.get('/api/user/profile');
+  }
+
+  async updateUserAvatar(avatarUrl: string): Promise<any> {
+    return this.put('/api/user/profile/avatar', { avatar_url: avatarUrl });
+  }
+
+  async updateUsername(username: string): Promise<any> {
+    return this.put('/api/user/profile/username', { username });
+  }
+
   async completeOnboarding(): Promise<void> {
     return this.put('/api/auth/profile/onboarding', {});
+  }
+
+  // ✅ Streak-related methods  
+  async getUserStreak() {
+    return this.get('/api/user/streak');
+  }
+
+  async updateDailyStreak() {
+    return this.post('/api/user/streak/update', {});
+  }
+
+  async getDailyContentProgress() {
+    return this.get('/api/user/daily-progress');
   }
 }
 

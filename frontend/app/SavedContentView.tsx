@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import ActionButtons from '../components/ActionButtons';
 import { Fact } from '../hooks/useInfiniteContent';
 import { ReelCard } from '../components/ReelCard';
 import { Ionicons } from '@expo/vector-icons';
+import { useReelAudioStore } from '../lib/store';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -122,10 +123,23 @@ const FactCarousel = ({ fact }: { fact: Fact }) => {
           setCardIndex(idx);
         }}
       />
-      {/* Action buttons positioned on the right side */}
+      {/* Action buttons positioned on the right side - only like/unlike and save/unsave allowed */}
       <ActionButtons
         fact={{ ...fact, contentType: 'text' as const }}
         style={styles.actionButtons}
+        onInteractionTracked={(contentId, interactionType, value) => {
+          // Only track unlike/unsave interactions for saved content
+          if (interactionType === 'like' || interactionType === 'save') {
+            console.log(
+              `📱 SavedContentView: ${interactionType} interaction tracked for saved content ${contentId} with value ${value}`
+            );
+            // Note: Could be tracked to backend here if needed
+          } else {
+            console.log(
+              `📱 SavedContentView: Skipped ${interactionType} tracking for saved content - not applicable`
+            );
+          }
+        }}
       />
     </View>
   );
@@ -151,9 +165,26 @@ const ReelContent = ({ fact }: { fact: Fact }) => {
         onError={(error: string) =>
           console.error(`Saved reel error for ${fact.id}:`, error)
         }
+        disableEngagementTracking={true} // No watch time tracking for saved content
       />
-      {/* Action buttons for reels */}
-      <ActionButtons fact={reelFact} style={styles.reelActionButtons} />
+      {/* Action buttons for reels - only like/unlike and save/unsave allowed */}
+      <ActionButtons
+        fact={reelFact}
+        style={styles.reelActionButtons}
+        onInteractionTracked={(contentId, interactionType, value) => {
+          // Only track unlike/unsave interactions for saved content
+          if (interactionType === 'like' || interactionType === 'save') {
+            console.log(
+              `📱 SavedContentView: ${interactionType} interaction tracked for saved reel ${contentId} with value ${value}`
+            );
+            // Note: Could be tracked to backend here if needed
+          } else {
+            console.log(
+              `📱 SavedContentView: Skipped ${interactionType} tracking for saved content - not applicable`
+            );
+          }
+        }}
+      />
     </View>
   );
 };
@@ -163,6 +194,29 @@ export default function SavedContentView({
   onBack,
 }: SavedContentViewProps) {
   const contentType = getContentType(fact);
+  const { pauseAllVideos } = useReelAudioStore();
+
+  // Log that engagement tracking is disabled for saved content
+  useEffect(() => {
+    console.log(
+      `📱 SavedContentView: Viewing saved ${contentType} content ${fact.id} - engagement tracking disabled`
+    );
+  }, [contentType, fact.id]);
+
+  // Cleanup when component unmounts - pause any playing videos
+  useEffect(() => {
+    return () => {
+      console.log('🧹 SavedContentView: Component unmounting, pausing videos');
+      pauseAllVideos();
+    };
+  }, [pauseAllVideos]);
+
+  // Enhanced back handler that also pauses videos
+  const handleBack = useCallback(() => {
+    console.log('🔙 SavedContentView: Back button pressed, pausing videos');
+    pauseAllVideos();
+    onBack();
+  }, [pauseAllVideos, onBack]);
 
   return (
     <SafeAreaView style={styles.root}>
@@ -170,7 +224,7 @@ export default function SavedContentView({
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={onBack}
+          onPress={handleBack}
           activeOpacity={0.7}
         >
           <Ionicons name="arrow-back" size={24} color="#fff" />

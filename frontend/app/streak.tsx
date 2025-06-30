@@ -1,5 +1,5 @@
 // streak.tsx
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,8 @@ import { useStore } from '../lib/store';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
+import { useStreakData } from '../hooks/useStreakData';
+import StreakCelebrationModal from '../components/StreakCelebrationModal';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -38,21 +40,74 @@ const MONTHS = [
 
 const YEARS = Array.from({ length: 2100 - 2024 + 1 }, (_, i) => 2024 + i);
 
-const MOCK_DATA = {
-  currentStreak: 6,
-  activeDaysThisMonth: 15,
-  streakRevives: 2,
-  activeDays: [1, 2, 3, 5, 7, 8, 10, 12, 14, 15, 17, 19, 21, 22, 24],
-};
-
 export default function StreakScreen() {
   const theme = useStore((state) => state.theme);
+  const {
+    currentStreak,
+    bestStreak,
+    todayCompleted,
+    lastStreakDate,
+    canEarnStreakToday,
+    milestoneReached,
+    isLoading,
+    showStreakModal,
+    setShowStreakModal,
+    fetchStreakData,
+    markCelebrationShown,
+    hasUnseenStreakNotification,
+    pendingCelebrationStreak,
+    clearStreakNotification,
+  } = useStreakData();
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [dropdownVisible, setDropdownVisible] = useState(false);
   const [dropdownY, setDropdownY] = useState(0);
   const dropdownAnim = useRef(new Animated.Value(0)).current;
   const monthYearBarRef = useRef<View>(null);
+
+  // Fetch streak data on mount
+  useEffect(() => {
+    fetchStreakData();
+  }, [fetchStreakData]);
+
+  // Show celebration modal if user navigated here with a pending notification
+  useEffect(() => {
+    console.log('🎭 StreakScreen: Checking celebration modal conditions...');
+    console.log(
+      `   • hasUnseenStreakNotification: ${hasUnseenStreakNotification}`
+    );
+    console.log(`   • pendingCelebrationStreak: ${pendingCelebrationStreak}`);
+    console.log(`   • showStreakModal: ${showStreakModal}`);
+
+    if (hasUnseenStreakNotification && pendingCelebrationStreak > 0) {
+      console.log(
+        `🎉 Auto-showing celebration modal for ${pendingCelebrationStreak} day streak`
+      );
+      setShowStreakModal(true);
+    } else {
+      console.log('🚫 Celebration modal conditions not met:');
+      if (!hasUnseenStreakNotification) {
+        console.log('   • No unseen streak notification');
+      }
+      if (pendingCelebrationStreak <= 0) {
+        console.log(
+          `   • No pending celebration streak (${pendingCelebrationStreak})`
+        );
+      }
+    }
+  }, [
+    hasUnseenStreakNotification,
+    pendingCelebrationStreak,
+    setShowStreakModal,
+  ]);
+
+  // Handle closing the celebration modal
+  const handleCelebrationClose = () => {
+    setShowStreakModal(false);
+    markCelebrationShown();
+    clearStreakNotification(); // Clear the notification state
+    console.log('🎭 Celebration modal closed from streak screen');
+  };
 
   const getDaysInMonth = (month: number, year: number) => {
     return new Date(year, month + 1, 0).getDate();
@@ -62,17 +117,40 @@ export default function StreakScreen() {
     return new Date(year, month, 1).getDay();
   };
 
+  // Generate streak days based on current streak and last streak date
+  const generateStreakDays = () => {
+    if (!lastStreakDate || currentStreak === 0) return [];
+
+    const streakDays: string[] = [];
+    const endDate = new Date(lastStreakDate);
+
+    // Generate consecutive days going backwards from last streak date
+    for (let i = 0; i < currentStreak; i++) {
+      const date = new Date(endDate);
+      date.setDate(date.getDate() - i);
+      streakDays.push(date.toISOString().split('T')[0]);
+    }
+
+    return streakDays;
+  };
+
   const renderCalendar = () => {
     const daysInMonth = getDaysInMonth(currentMonth, currentYear);
     const firstDay = getFirstDayOfMonth(currentMonth, currentYear);
     const days = [];
+    const streakDays = generateStreakDays(); // ✅ Generate streak days from database data
 
     for (let i = 0; i < firstDay; i++) {
       days.push(<View key={`empty-${i}`} style={styles.calendarDay} />);
     }
 
     for (let i = 1; i <= daysInMonth; i++) {
-      const isActive = MOCK_DATA.activeDays.includes(i);
+      // Check if this day is in the streak days for the current month/year
+      const currentDate = new Date(currentYear, currentMonth, i);
+      const dateStr = currentDate.toISOString().split('T')[0];
+      const isActive = streakDays.includes(dateStr);
+      const isToday = dateStr === new Date().toISOString().split('T')[0];
+
       days.push(
         <View key={i} style={styles.calendarDay}>
           <View
@@ -81,12 +159,19 @@ export default function StreakScreen() {
               isActive && {
                 backgroundColor: '#ef4444',
               },
+              isToday &&
+                !isActive && {
+                  borderWidth: 2,
+                  borderColor: '#ef4444',
+                },
             ]}
           >
             <Text
               style={[
                 styles.calendarDayText,
-                { color: isActive ? '#fff' : Colors.text },
+                {
+                  color: isActive ? '#fff' : isToday ? '#ef4444' : Colors.text,
+                },
               ]}
             >
               {i}
@@ -188,13 +273,19 @@ export default function StreakScreen() {
       >
         <View style={styles.header}>
           <Text style={[styles.streakCount, { color: Colors.tint }]}>
-            {MOCK_DATA.currentStreak} day streak! 🔥
+            {currentStreak} day streak! 🔥
           </Text>
           <View
             style={[styles.encouragementBox, { backgroundColor: '#10B98120' }]}
           >
             <Text style={[styles.encouragementText, { color: Colors.tint }]}>
-              You're on fire! Keep going! 🎯
+              {currentStreak >= 7
+                ? "You're absolutely crushing it! 🚀"
+                : currentStreak >= 3
+                ? 'Keep the momentum going! 💪'
+                : currentStreak > 0
+                ? 'Great start! Keep it up! ⭐'
+                : 'Start your learning streak today! 📚'}
             </Text>
           </View>
         </View>
@@ -236,10 +327,10 @@ export default function StreakScreen() {
             ]}
           >
             <Text style={[styles.statValue, { color: Colors.text }]}>
-              {MOCK_DATA.activeDaysThisMonth}
+              {currentStreak}
             </Text>
             <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
-              Active Days
+              Current Streak
             </Text>
           </TouchableOpacity>
 
@@ -250,10 +341,10 @@ export default function StreakScreen() {
             ]}
           >
             <Text style={[styles.statValue, { color: Colors.text }]}>
-              {MOCK_DATA.streakRevives}
+              {bestStreak}
             </Text>
             <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
-              Streak Revives
+              Best Streak
             </Text>
           </TouchableOpacity>
         </View>
@@ -281,21 +372,35 @@ export default function StreakScreen() {
         </View>
 
         <View style={styles.rewardProgress}>
-          <Text style={[styles.rewardText, { color: Colors.textSecondary }]}>
-            🎁 Maintain streak for 4 more days to unlock a special reward!
-          </Text>
-          <View style={styles.progressBarContainer}>
-            <View
-              style={[styles.progressBar, { backgroundColor: '#F59E0B20' }]}
-            >
-              <View
-                style={[
-                  styles.progressFill,
-                  { backgroundColor: '#F59E0B', width: '60%' },
-                ]}
-              />
-            </View>
-          </View>
+          {milestoneReached ? (
+            <Text style={[styles.rewardText, { color: Colors.tint }]}>
+              🎉 Congratulations! You've earned 100 coins! 💰
+            </Text>
+          ) : (
+            <>
+              <Text
+                style={[styles.rewardText, { color: Colors.textSecondary }]}
+              >
+                💰 Maintain streak for {7 - (currentStreak % 7)} more days to
+                earn 100 coins!
+              </Text>
+              <View style={styles.progressBarContainer}>
+                <View
+                  style={[styles.progressBar, { backgroundColor: '#F59E0B20' }]}
+                >
+                  <View
+                    style={[
+                      styles.progressFill,
+                      {
+                        backgroundColor: '#F59E0B',
+                        width: `${((currentStreak % 7) / 7) * 100}%`,
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
+            </>
+          )}
         </View>
       </ScrollView>
 
@@ -395,6 +500,27 @@ export default function StreakScreen() {
           </Animated.View>
         </TouchableOpacity>
       )}
+
+      {/* Streak Celebration Modal */}
+      {(() => {
+        console.log('🎭 StreakScreen: Rendering StreakCelebrationModal...');
+        console.log(`   • visible: ${showStreakModal}`);
+        console.log(
+          `   • pendingCelebrationStreak: ${pendingCelebrationStreak}`
+        );
+        console.log(`   • currentStreak: ${currentStreak}`);
+        console.log(
+          `   • currentStreak prop: ${
+            pendingCelebrationStreak || currentStreak
+          }`
+        );
+        return null;
+      })()}
+      <StreakCelebrationModal
+        visible={showStreakModal}
+        currentStreak={pendingCelebrationStreak || currentStreak}
+        onClose={handleCelebrationClose}
+      />
     </SafeAreaView>
   );
 }
