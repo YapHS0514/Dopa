@@ -5,6 +5,7 @@ from ..schemas.user import User, UserRole
 from ..dependencies.auth import get_current_user, require_role
 from ..services.supabase import get_supabase_client, get_supabase_admin_client
 import logging
+import random
 
 router = APIRouter(prefix="/api/contents", tags=["contents"])
 logger = logging.getLogger(__name__)
@@ -59,14 +60,14 @@ async def get_contents(
                 logger.info(f"🔍 Applying NOT IN filter to exclude {len(interacted_content_ids)} interacted content pieces")
                 response = supabase.table("contents").select(
                     "id, title, summary, content_type, media_url, source_url, created_at"
-                ).not_.in_("id", interacted_content_ids).order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+                ).not_.in_("id", interacted_content_ids).order("created_at", desc=False).range(offset, offset + limit * 3 - 1).execute()
                 logger.info(f"✅ Filter applied successfully - query excluded {len(interacted_content_ids)} content pieces")
             else:
                 # No interactions yet, return all content
                 logger.info("🆕 No interactions to filter - returning all available content")
                 response = supabase.table("contents").select(
                     "id, title, summary, content_type, media_url, source_url, created_at"
-                ).order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+                ).order("created_at", desc=False).range(offset, offset + limit * 3 - 1).execute()
         else:
             # Step 3: Get content IDs linked to preferred topics via content_topics
             logger.info("Step 3: Getting content IDs for preferred topics")
@@ -89,13 +90,13 @@ async def get_contents(
                     logger.info(f"🔍 Fallback: Applying NOT IN filter to exclude {len(interacted_content_ids)} interacted content pieces")
                     response = supabase.table("contents").select(
                         "id, title, summary, content_type, media_url, source_url, created_at"
-                    ).not_.in_("id", interacted_content_ids).order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+                    ).not_.in_("id", interacted_content_ids).order("created_at", desc=False).range(offset, offset + limit * 3 - 1).execute()
                     logger.info(f"✅ Fallback filter applied successfully")
                 else:
                     logger.info("🆕 Fallback: No interactions to filter - returning all available content")
                     response = supabase.table("contents").select(
                         "id, title, summary, content_type, media_url, source_url, created_at"
-                    ).order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+                    ).order("created_at", desc=False).range(offset, offset + limit * 3 - 1).execute()
             else:
                 # Step 4: Filter out interacted content from preferred content
                 logger.info("Step 4: Filtering preferred content to exclude interacted content")
@@ -125,7 +126,7 @@ async def get_contents(
                         logger.info(f"🔍 Complete fallback: Applying NOT IN filter to exclude {len(interacted_content_ids)} interacted content pieces")
                         response = supabase.table("contents").select(
                             "id, title, summary, content_type, media_url, source_url, created_at"
-                        ).not_.in_("id", interacted_content_ids).order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+                        ).not_.in_("id", interacted_content_ids).order("created_at", desc=False).range(offset, offset + limit * 3 - 1).execute()
                         logger.info(f"✅ Complete fallback filter applied successfully")
                     else:
                         # If user has interacted with too much content, just return latest content
@@ -133,7 +134,7 @@ async def get_contents(
                         logger.warning(f"⚠️ FILTERING DISABLED - user has {len(interacted_content_ids)} interactions (>1000 limit)")
                         response = supabase.table("contents").select(
                             "id, title, summary, content_type, media_url, source_url, created_at"
-                        ).order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+                        ).order("created_at", desc=False).range(offset, offset + limit * 3 - 1).execute()
                 else:
                     # Get fresh preferred content
                     logger.info(f"✅ Serving {len(fresh_preferred_content_ids)} fresh preferred content pieces")
@@ -142,9 +143,18 @@ async def get_contents(
                         logger.info(f"📋 Sample fresh content IDs: {sample_fresh}{'...' if len(fresh_preferred_content_ids) > 3 else ''}")
                     response = supabase.table("contents").select(
                         "id, title, summary, content_type, media_url, source_url, created_at"
-                    ).in_("id", fresh_preferred_content_ids).order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+                    ).in_("id", fresh_preferred_content_ids).order("created_at", desc=False).range(offset, offset + limit * 3 - 1).execute()
         
         logger.info(f"Final content response: {response.data}")
+        
+        # 🎲 RANDOMIZATION: Shuffle the results to mix reels and carousels
+        if response.data:
+            # Shuffle the fetched content to randomize order
+            content_list = list(response.data)
+            random.shuffle(content_list)
+            # Take only the requested limit
+            response.data = content_list[:limit]
+            logger.info(f"🎲 Randomized content order and limited to {len(response.data)} items")
         
         # 🔍 VERIFICATION: Check that returned content doesn't contain any interacted content
         returned_content_ids = [content["id"] for content in response.data] if response.data else []
