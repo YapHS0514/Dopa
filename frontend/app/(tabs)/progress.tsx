@@ -20,6 +20,8 @@ import * as Animatable from 'react-native-animatable';
 import { router } from 'expo-router';
 import { useStreakData } from '../../hooks/useStreakData';
 import { useSavedContent } from '../../contexts/SavedContentContext';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../hooks/useAuth';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const STAT_CARD_WIDTH = (SCREEN_WIDTH - 60) / 2;
@@ -34,34 +36,11 @@ const MOCK_DATA = {
   badges: [
     {
       id: '1',
-      name: 'Early Bird',
+      name: 'Baby Steps',
       icon: '🌅',
-      description: 'Complete 5 facts before 9 AM',
+      description: 'Complete 2 facts for the first time',
     },
-    {
-      id: '2',
-      name: 'Night Owl',
-      icon: '🦉',
-      description: 'Complete 5 facts after 10 PM',
-    },
-    {
-      id: '3',
-      name: 'Science Whiz',
-      icon: '🧬',
-      description: 'Master 50 science facts',
-    },
-    {
-      id: '4',
-      name: 'Space Explorer',
-      icon: '🚀',
-      description: 'Master 50 space facts',
-    },
-    {
-      id: '5',
-      name: 'Nature Lover',
-      icon: '🌿',
-      description: 'Master 50 nature facts',
-    },
+    
   ],
 };
 
@@ -77,11 +56,36 @@ export default function ProgressScreen() {
   const { savedContentIds, refreshSavedContent } = useSavedContent();
   const totalSavedFacts = savedContentIds.size;
 
+  // Get session data
+  const { session } = useAuth();
+  const [userBadges, setUserBadges] = useState<any[]>([]);
+  const totalFacts = 4;
+
   // Fetch data on mount
   useEffect(() => {
+    let isMounted = true;
     fetchStreakData();
     refreshSavedContent();
-  }, [fetchStreakData, refreshSavedContent]);
+    // Fetch user badges from Supabase with badge details
+    const fetchBadges = async () => {
+      if (!session?.user?.id) return;
+      const { data, error } = await supabase
+        .from('user_badges')
+        .select('badge_id, badges (name, description, icon)')
+        .eq('user_id', session.user.id);
+      // Double-guard: only update state if still mounted and session is valid
+      if (!error && data && isMounted && session?.user?.id) setUserBadges(data);
+    };
+    fetchBadges();
+    return () => { isMounted = false; };
+  }, [fetchStreakData, refreshSavedContent, session?.user?.id]);
+
+  // Reset badges when session is cleared (logout)
+  useEffect(() => {
+    if (!session?.user?.id) {
+      setUserBadges([]);
+    }
+  }, [session?.user?.id]);
 
   const renderBadge = (badge: (typeof MOCK_DATA.badges)[0]) => (
     <TouchableOpacity
@@ -116,7 +120,7 @@ export default function ProgressScreen() {
                 This Week
               </Text>
               <Text style={styles.weeklyStats}>
-                You've learned {MOCK_DATA.weeklyFacts} new facts! 🎉
+                You've learned {totalFacts} new facts! 🎉
               </Text>
             </View>
           </View>
@@ -158,7 +162,7 @@ export default function ProgressScreen() {
             >
               <Text style={styles.statIcon}>🧠</Text>
               <Text style={[styles.statValue, { color: Colors.text }]}>
-                {MOCK_DATA.totalFacts}
+                {totalFacts}
               </Text>
               <Text style={[styles.statLabel, { color: Colors.textSecondary }]}>
                 Total Facts

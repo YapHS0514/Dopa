@@ -3,6 +3,7 @@ from ..schemas.content import UserInteractionRequest
 from ..schemas.user import User
 from ..dependencies.auth import get_current_user
 from ..services.supabase import get_supabase_client
+from ..services.badges import check_and_award_badges
 
 router = APIRouter(prefix="/api/interactions", tags=["interactions"])
 
@@ -51,6 +52,10 @@ async def record_interaction(
             logger.error(f"❌ Failed to record interaction - no data returned")
         
         return {"data": response.data[0], "message": "Interaction recorded successfully"}
+        # Check and award badges
+        new_badge = check_and_award_badges(user.id)
+        
+        return {"data": response.data[0], "message": "Interaction recorded successfully", "new_badge": new_badge}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
