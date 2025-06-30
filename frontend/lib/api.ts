@@ -61,7 +61,7 @@ interface UserResponse {
 class ApiClient {
   private baseUrl: string;
   private token: string | null = null;
-  private readonly timeout = 5000;
+  private readonly timeout = 10000; // Increased timeout
   private readonly maxRetries = 3;
   private axiosInstance: AxiosInstance;
 
@@ -75,10 +75,16 @@ class ApiClient {
       },
     });
 
+    // Enhanced response interceptor
     this.axiosInstance.interceptors.response.use(
       (response) => response,
       async (error) => {
         const config = error.config;
+
+        // Don't retry certain error types
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          return Promise.reject(error);
+        }
 
         if (!config || config.__retryCount >= this.maxRetries) {
           return Promise.reject(error);
@@ -88,9 +94,24 @@ class ApiClient {
         config.__retryCount++;
 
         console.log(`Retrying request to ${config.url}, ${this.maxRetries - config.__retryCount} attempts remaining`);
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        
+        // Exponential backoff
+        const delay = Math.pow(2, config.__retryCount) * 1000;
+        await new Promise((resolve) => setTimeout(resolve, delay));
 
         return this.axiosInstance(config);
+      }
+    );
+
+    // Request interceptor for debugging
+    this.axiosInstance.interceptors.request.use(
+      (config) => {
+        console.log(`🌐 API Request: ${config.method?.toUpperCase()} ${config.url}`);
+        return config;
+      },
+      (error) => {
+        console.error('🚨 API Request Error:', error);
+        return Promise.reject(error);
       }
     );
   }
@@ -110,18 +131,42 @@ class ApiClient {
       const response = await request;
       return response.data;
     } catch (error: any) {
-      console.error('API Error:', {
+      console.error('🚨 API Error:', {
         status: error.response?.status,
         statusText: error.response?.statusText,
         url: error.config?.url,
         data: error.response?.data,
+        message: error.message,
       });
 
-      if (error.response?.status === 429) {
-        throw new Error('Too many attempts. Please try again later.');
+      // Enhanced error handling
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('Request timeout. Please check your connection and try again.');
       }
 
-      throw new Error(error.response?.data?.detail || error.message);
+      if (error.code === 'NETWORK_ERROR' || !error.response) {
+        throw new Error('Network error. Please check your internet connection.');
+      }
+
+      if (error.response?.status === 429) {
+        throw new Error('Too many requests. Please wait a moment and try again.');
+      }
+
+      if (error.response?.status === 401) {
+        throw new Error('Authentication failed. Please sign in again.');
+      }
+
+      if (error.response?.status === 403) {
+        throw new Error('Access denied. You don\'t have permission for this action.');
+      }
+
+      if (error.response?.status >= 500) {
+        throw new Error('Server error. Please try again later.');
+      }
+
+      // Use server error message if available
+      const serverMessage = error.response?.data?.detail || error.response?.data?.message;
+      throw new Error(serverMessage || error.message || 'An unexpected error occurred');
     }
   }
 
@@ -147,7 +192,18 @@ class ApiClient {
     return this.handleRequest<T>(this.axiosInstance.delete(endpoint));
   }
 
-  // ✅ Content-related methods (from your version)
+  // Health check method
+  async healthCheck(): Promise<boolean> {
+    try {
+      await this.get('/health');
+      return true;
+    } catch (error) {
+      console.error('Health check failed:', error);
+      return false;
+    }
+  }
+
+  // ✅ Content-related methods
   async getContents(limit = 20, offset = 0, topicId?: string) {
     const params = new URLSearchParams({
       limit: limit.toString(),
@@ -233,7 +289,7 @@ class ApiClient {
     return this.post('/api/contents', content);
   }
 
-  // ✅ Auth-related methods (from your friend's version)
+  // ✅ Auth-related methods
   async signUp(email: string, password: string, username: string): Promise<UserResponse> {
     return this.post('/api/auth/signup', { email, password, username });
   }

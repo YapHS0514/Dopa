@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { apiClient } from '../lib/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Enhanced Fact interface with video and carousel support
 export interface CarouselSlide {
@@ -36,7 +37,12 @@ interface UseInfiniteContentReturn {
   hasMore: boolean;
   isInitialized: boolean;
   seenContentCount: number;
+  refreshContent: () => Promise<void>;
 }
+
+const CACHE_KEY = 'cached_content';
+const CACHE_EXPIRY_KEY = 'cache_expiry';
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 export const useInfiniteContent = (): UseInfiniteContentReturn => {
   const [content, setContent] = useState<Fact[]>([]);
@@ -51,8 +57,54 @@ export const useInfiniteContent = (): UseInfiniteContentReturn => {
   const lastRequestTime = useRef(0);
   
   // Configuration
-  const batchSize = 3; // Reduced batch size for faster loading
-  const minRequestInterval = 1000; // Increased to 1 second to prevent rate limiting
+  const batchSize = 5; // Optimized batch size
+  const minRequestInterval = 500; // Reduced interval for better UX
+
+  // Cache management
+  const loadFromCache = useCallback(async (): Promise<Fact[] | null> => {
+    try {
+      const [cachedContent, cacheExpiry] = await Promise.all([
+        AsyncStorage.getItem(CACHE_KEY),
+        AsyncStorage.getItem(CACHE_EXPIRY_KEY),
+      ]);
+
+      if (cachedContent && cacheExpiry) {
+        const expiryTime = parseInt(cacheExpiry, 10);
+        if (Date.now() < expiryTime) {
+          console.log('📦 Loading content from cache');
+          return JSON.parse(cachedContent);
+        }
+      }
+    } catch (error) {
+      console.warn('Cache read error:', error);
+    }
+    return null;
+  }, []);
+
+  const saveToCache = useCallback(async (contentToCache: Fact[]) => {
+    try {
+      const expiryTime = Date.now() + CACHE_DURATION;
+      await Promise.all([
+        AsyncStorage.setItem(CACHE_KEY, JSON.stringify(contentToCache)),
+        AsyncStorage.setItem(CACHE_EXPIRY_KEY, expiryTime.toString()),
+      ]);
+      console.log('💾 Content saved to cache');
+    } catch (error) {
+      console.warn('Cache write error:', error);
+    }
+  }, []);
+
+  const clearCache = useCallback(async () => {
+    try {
+      await Promise.all([
+        AsyncStorage.removeItem(CACHE_KEY),
+        AsyncStorage.removeItem(CACHE_EXPIRY_KEY),
+      ]);
+      console.log('🗑️ Cache cleared');
+    } catch (error) {
+      console.warn('Cache clear error:', error);
+    }
+  }, []);
 
   const loadMoreContent = useCallback(async () => {
     // Prevent concurrent requests and spam
@@ -82,9 +134,23 @@ export const useInfiniteContent = (): UseInfiniteContentReturn => {
     const loadingTimeout = setTimeout(() => {
       console.log('⚠️ Loading timeout! Resetting loading state...');
       setIsLoading(false);
-    }, 10000); // 10 second timeout
+    }, 15000); // 15 second timeout
 
     try {
+      // Try cache first for initial load
+      if (currentOffset.current === 0 && content.length === 0) {
+        const cachedContent = await loadFromCache();
+        if (cachedContent && cachedContent.length > 0) {
+          setContent(cachedContent);
+          cachedContent.forEach(item => seenContentIds.current.add(item.id));
+          currentOffset.current = cachedContent.length;
+          isInitialized.current = true;
+          setIsLoading(false);
+          clearTimeout(loadingTimeout);
+          return;
+        }
+      }
+
       const response = await apiClient.getContents(batchSize, currentOffset.current) as {
         data: Fact[];
         count: number;
@@ -129,6 +195,12 @@ export const useInfiniteContent = (): UseInfiniteContentReturn => {
       setContent(prev => {
         const updated = [...prev, ...enhancedContent];
         console.log(`Content updated: ${prev.length} -> ${updated.length} items`);
+        
+        // Cache the first batch for faster subsequent loads
+        if (prev.length === 0 && updated.length > 0) {
+          saveToCache(updated.slice(0, 10)); // Cache first 10 items
+        }
+        
         return updated;
       });
 
@@ -143,13 +215,11 @@ export const useInfiniteContent = (): UseInfiniteContentReturn => {
       }
 
       // Check if we should stop loading more - be more conservative
-      // Only set hasMore to false if we got 0 items or significantly less than batch size
       if (enhancedContent.length === 0) {
         console.log('⚠️ No new content after deduplication, assuming no more content');
         setHasMore(false);
       } else if (enhancedContent.length < Math.floor(batchSize / 2)) {
         console.log(`⚠️ Received significantly less than batch size (${enhancedContent.length}/${batchSize}), might be running out of content`);
-        // Don't set hasMore to false yet, let the next request determine this
       } else {
         console.log(`✅ Received ${enhancedContent.length} new items, continuing to load more when needed`);
       }
@@ -166,7 +236,7 @@ export const useInfiniteContent = (): UseInfiniteContentReturn => {
       clearTimeout(loadingTimeout);
       setIsLoading(false);
     }
-  }, [isLoading, hasMore, content.length]);
+  }, [isLoading, hasMore, content.length, loadFromCache, saveToCache]);
 
   const resetContent = useCallback(() => {
     console.log('Resetting content system');
@@ -178,7 +248,15 @@ export const useInfiniteContent = (): UseInfiniteContentReturn => {
     setIsLoading(false);
     isInitialized.current = false;
     lastRequestTime.current = 0;
-  }, []);
+    clearCache();
+  }, [clearCache]);
+
+  const refreshContent = useCallback(async () => {
+    console.log('Refreshing content');
+    await clearCache();
+    resetContent();
+    await loadMoreContent();
+  }, [clearCache, resetContent, loadMoreContent]);
 
   const trackInteraction = useCallback(async (
     contentId: string, 
@@ -212,5 +290,6 @@ export const useInfiniteContent = (): UseInfiniteContentReturn => {
     hasMore,
     isInitialized: isInitialized.current,
     seenContentCount: seenContentIds.current.size,
+    refreshContent,
   };
-}; 
+};
