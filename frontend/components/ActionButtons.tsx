@@ -12,6 +12,7 @@ import { Audio } from 'expo-av';
 import { apiClient } from '../lib/api';
 import { useSavedContent } from '../contexts/SavedContentContext';
 import { useReelAudioStore, useTTSAudioStore } from '../lib/store';
+import { playCombinedTTS } from '../lib/ttsUtils';
 
 interface ActionButtonsProps {
   fact?: any; // TODO: Replace with proper Fact type from backend
@@ -21,16 +22,24 @@ interface ActionButtonsProps {
     interactionType: string,
     value: number
   ) => void;
+  onListen?: () => void;
 }
 
 export default function ActionButtons({
   fact,
   style,
   onInteractionTracked,
+  onListen,
 }: ActionButtonsProps) {
   const [liked, setLiked] = useState(false);
   const [listening, setListening] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [ttsAudioUri, setTTSAudioUri] = useState<string | null>(null);
+  const [ttsPlaybackObj, setTTSPlaybackObj] = useState<Audio.Sound | null>(
+    null
+  );
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   // Use the saved content context for efficient checking
   const {
@@ -71,7 +80,7 @@ export default function ActionButtons({
 
   // TTS state
   const isCurrentTTS = ttsCurrentlyPlaying === fact?.id;
-  const isListening = listening || isCurrentTTS;
+  const isListening = isAudioPlaying || listening || isCurrentTTS;
 
   // Unified Listen button logic for both Reels and Slides
   let listenPlaying = false;
@@ -81,7 +90,7 @@ export default function ActionButtons({
     listenPlaying = isListening;
   }
   const listenIcon = listenPlaying ? 'volume-high' : 'volume-medium';
-  const listenColor = listenPlaying ? 'gold' : '#fff';
+  const listenColor = isPlaying ? '#FFD700' : '#fff';
 
   // Debug logging
   console.log(
@@ -228,86 +237,27 @@ export default function ActionButtons({
   };
 
   const handleListen = async () => {
+    if (isPlaying) return;
     animatePress(listenAnim);
+    setIsPlaying(true);
+    if (onListen) {
+      try {
+        await onListen();
+      } finally {
+        setIsPlaying(false);
+      }
+      return;
+    }
     if (isReel) {
-      // Toggle global mute for all reels
       toggleAllReelsMute();
+      setIsPlaying(false);
     } else {
-      // For Text/Image content: Handle voiceover with ElevenLabs
-      if (!isListening) {
-        // Stop any currently playing TTS
-        await stopTTSCurrent();
-
-        if (!fact?.id || !fact?.fullContent) {
-          Alert.alert('Error', 'No content available for narration');
-          return;
-        }
-
-        try {
-          setTTSLoading(true);
-          setListening(true);
-
-          // Request audio permissions
-          const { status } = await Audio.requestPermissionsAsync();
-          if (status !== 'granted') {
-            Alert.alert('Permission to use speaker denied.');
-            setTTSLoading(false);
-            setListening(false);
-            return;
-          }
-
-          console.log(`🎤 Generating TTS for content: ${fact.id}`);
-
-          // Generate TTS using ElevenLabs
-          const audioBlob = await apiClient.generateTTS(fact.fullContent);
-
-          // Convert blob to base64 for Expo Audio
-          const reader = new FileReader();
-          const audioPromise = new Promise<string>((resolve, reject) => {
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = reject;
-          });
-          reader.readAsDataURL(audioBlob);
-
-          const audioDataUrl = await audioPromise;
-
-          // Create and play audio
-          const { sound: newSound } = await Audio.Sound.createAsync(
-            { uri: audioDataUrl },
-            { shouldPlay: true }
-          );
-
-          setTTSAudioRef(newSound);
-          setTTSCurrentlyPlaying(fact.id);
-          setListening(true);
-
-          // Set up completion handler
-          newSound.setOnPlaybackStatusUpdate((status) => {
-            if (status.isLoaded && status.didJustFinish) {
-              console.log(`🎤 TTS finished for content: ${fact.id}`);
-              setListening(false);
-              setTTSCurrentlyPlaying(null);
-              setTTSAudioRef(null);
-            }
-          });
-
-          console.log(`🎤 TTS started for content: ${fact.id}`);
-        } catch (error: any) {
-          console.error('TTS Error:', error);
-          Alert.alert(
-            'Audio Error',
-            error.message || 'Failed to generate narration'
-          );
-          setListening(false);
-          setTTSCurrentlyPlaying(null);
-          setTTSAudioRef(null);
-        } finally {
-          setTTSLoading(false);
-        }
-      } else {
-        // Stop current TTS
-        await stopTTSCurrent();
-        setListening(false);
+      try {
+        await playCombinedTTS(fact.summary);
+      } catch (err) {
+        console.error('TTS error:', err);
+      } finally {
+        setIsPlaying(false);
       }
     }
   };
@@ -320,6 +270,14 @@ export default function ActionButtons({
     // Share.share({ message: `Check out this fact: ${shareUrl}` })
     Alert.alert('Share', 'Share functionality coming soon!');
   };
+
+  useEffect(() => {
+    return () => {
+      if (ttsPlaybackObj) {
+        ttsPlaybackObj.unloadAsync();
+      }
+    };
+  }, [ttsPlaybackObj]);
 
   return (
     <View style={[styles.container, style]}>
@@ -335,7 +293,11 @@ export default function ActionButtons({
         </Animated.View>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={handleListen} activeOpacity={0.7}>
+      <TouchableOpacity
+        onPress={handleListen}
+        activeOpacity={0.7}
+        disabled={isPlaying}
+      >
         <Animated.View
           style={[styles.button, { transform: [{ scale: listenAnim }] }]}
         >

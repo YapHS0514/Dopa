@@ -90,7 +90,7 @@ export default function StreakScreen() {
       const currentDate = new Date(currentYear, currentMonth, i);
       const dateStr = currentDate.toISOString().split('T')[0];
       const isActive = streakDays.includes(dateStr);
-      
+
       days.push(
         <View key={i} style={styles.calendarDay}>
           <View
@@ -215,10 +215,10 @@ export default function StreakScreen() {
               {currentStreak >= 7
                 ? "You're absolutely crushing it! 🚀"
                 : currentStreak >= 3
-                ? "Keep the momentum going! 💪"
+                ? 'Keep the momentum going! 💪'
                 : currentStreak > 0
-                ? "Great start! Keep it up! ⭐"
-                : "Start your learning streak today! 📚"}
+                ? 'Great start! Keep it up! ⭐'
+                : 'Start your learning streak today! 📚'}
             </Text>
           </View>
         </View>
@@ -311,8 +311,11 @@ export default function StreakScreen() {
             </Text>
           ) : (
             <>
-              <Text style={[styles.rewardText, { color: Colors.textSecondary }]}>
-                💰 Maintain streak for {7 - (currentStreak % 7)} more days to earn 100 coins!
+              <Text
+                style={[styles.rewardText, { color: Colors.textSecondary }]}
+              >
+                💰 Maintain streak for {7 - (currentStreak % 7)} more days to
+                earn 100 coins!
               </Text>
               <View style={styles.progressBarContainer}>
                 <View
@@ -321,9 +324,9 @@ export default function StreakScreen() {
                   <View
                     style={[
                       styles.progressFill,
-                      { 
-                        backgroundColor: '#F59E0B', 
-                        width: `${((currentStreak % 7) / 7) * 100}%` 
+                      {
+                        backgroundColor: '#F59E0B',
+                        width: `${((currentStreak % 7) / 7) * 100}%`,
                       },
                     ]}
                   />
@@ -421,12 +424,6 @@ export default function StreakScreen() {
                 style={styles.dropdownCol}
               />
             </View>
-            {/* <TouchableOpacity
-              style={styles.dropdownConfirmButton}
-              onPress={confirmSelection}
-            >
-              <Text style={{ color: '#fff', fontSize: 16 }}>Done</Text>
-            </TouchableOpacity> */}
           </Animated.View>
         </TouchableOpacity>
       )}

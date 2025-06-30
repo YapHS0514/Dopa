@@ -23,6 +23,7 @@ import { useInfiniteContent, Fact } from '../../hooks/useInfiniteContent';
 import { apiClient } from '../../lib/api';
 import { ReelCard } from '../../components/ReelCard';
 import { useReelAudioStore, useTTSAudioStore } from '../../lib/store';
+import { playCombinedTTS } from '../../lib/ttsUtils';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -51,14 +52,6 @@ const getFactCards = (fact: Fact) => {
         isHookCard: undefined,
         sourceUrl: undefined,
       })),
-    {
-      key: 'summary',
-      title: 'Summary',
-      body: fact.summary,
-      isSourceCard: false,
-      isHookCard: undefined,
-      sourceUrl: undefined,
-    },
     {
       key: 'source',
       title: 'Source',
@@ -175,7 +168,11 @@ const FactCarousel = ({
         }}
       />
       {/* Unified right-hand side buttons */}
-      <ActionButtons fact={fact} style={styles.actionButtons} />
+      <ActionButtons
+        fact={fact}
+        style={styles.actionButtons}
+        onListen={() => playCombinedTTS(fact.summary)}
+      />
     </View>
   );
 };

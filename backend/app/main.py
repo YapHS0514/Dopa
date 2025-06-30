@@ -2,6 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from datetime import datetime
+from dotenv import load_dotenv
+load_dotenv()
+
 
 # Import routers
 from .routers import content, interactions, topics, saved, recommendations, auth, user, tts

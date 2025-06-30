@@ -19,6 +19,7 @@ import { Fact } from '../hooks/useInfiniteContent';
 import { ReelCard } from '../components/ReelCard';
 import { Ionicons } from '@expo/vector-icons';
 import { useReelAudioStore, useTTSAudioStore } from '../lib/store';
+import { playCombinedTTS } from '../lib/ttsUtils';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -140,6 +141,7 @@ const FactCarousel = ({ fact }: { fact: Fact }) => {
             );
           }
         }}
+        onListen={() => playCombinedTTS(fact.summary)}
       />
     </View>
   );
