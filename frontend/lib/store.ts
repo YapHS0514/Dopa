@@ -65,6 +65,7 @@ interface ReelAudioState {
   unregisterVideoRef: (contentId: string) => void;
   pausePreviousVideo: (newContentId: string) => Promise<void>;
   pauseAllVideos: () => Promise<void>;
+  // clearAllVideoRefs: () => void;
 }
 
 export const useReelAudioStore = create<ReelAudioState>((set, get) => ({
@@ -170,4 +171,9 @@ export const useReelAudioStore = create<ReelAudioState>((set, get) => ({
     set({ currentlyPlayingId: null });
     console.log(`✅ Store: All videos paused`);
   },
+
+  // clearAllVideoRefs: () => {
+  //   set({ videoRefs: {}, currentlyPlayingId: null });
+  //   console.log(`🧹 Store: Cleared all video refs for fresh start`);
+  // },
 })); 

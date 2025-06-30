@@ -257,6 +257,19 @@ class ApiClient {
   async completeOnboarding(): Promise<void> {
     return this.put('/api/auth/profile/onboarding', {});
   }
+
+  // ✅ Streak-related methods  
+  async getUserStreak() {
+    return this.get('/api/user/streak');
+  }
+
+  async updateDailyStreak() {
+    return this.post('/api/user/streak/update', {});
+  }
+
+  async getDailyContentProgress() {
+    return this.get('/api/user/daily-progress');
+  }
 }
 
 export const apiClient = new ApiClient();

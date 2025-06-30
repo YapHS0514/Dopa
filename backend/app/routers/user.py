@@ -63,95 +63,49 @@ async def get_user_profile(user: User = Depends(get_current_user)):
 
 @router.get("/streak")
 async def get_user_streak(user: User = Depends(get_current_user)):
-    """Get user's streak data based on daily content views"""
+    """Get user's streak data based on actual database streak_days field"""
     try:
         supabase = get_supabase_client()
         
-        # Get all view interactions for the user
-        interactions_response = supabase.table("user_interactions").select(
-            "id, user_id, content_id, interaction_type, created_at"
-        ).eq("user_id", user.id).eq("interaction_type", "view").order("created_at", desc=False).execute()
+        # Get user's profile with streak data
+        profile_response = supabase.table("profiles").select(
+            "streak_days, last_streak_date"
+        ).eq("user_id", user.id).single().execute()
         
-        if not interactions_response.data:
+        if not profile_response.data:
             return {
-                "active_days": 0,
-                "streak_days": [],
                 "current_streak": 0,
                 "best_streak": 0,
-                "streak_revival_count": 0,
                 "today_completed": False,
-                "reward_earned": False
+                "last_streak_date": None,
+                "can_earn_streak_today": False
             }
         
-        # Group interactions by date and count views per day
-        daily_views: Dict[str, int] = {}
-        for interaction in interactions_response.data:
-            # Parse the timestamp and get date
-            timestamp = datetime.fromisoformat(interaction["created_at"].replace('Z', '+00:00'))
-            date_str = timestamp.date().isoformat()
-            
-            daily_views[date_str] = daily_views.get(date_str, 0) + 1
+        current_streak = profile_response.data.get("streak_days", 0)
+        last_streak_date = profile_response.data.get("last_streak_date")
         
-        # Find streak-eligible days (≥ 5 views)
-        streak_days = [date_str for date_str, views in daily_views.items() if views >= 5]
-        streak_days.sort()
+        # Check if today is completed
+        today = date.today().isoformat()
+        today_completed = last_streak_date == today
         
-        # Calculate current streak (consecutive days ending today or yesterday)
-        current_streak = 0
-        today = date.today()
-        yesterday = today - timedelta(days=1)
+        # Get daily progress to see if user can earn streak today
+        progress_data = await get_daily_progress(user)
+        can_earn_streak_today = progress_data["can_earn_streak"] if progress_data else False
         
-        if streak_days:
-            # Check if today is completed
-            today_str = today.isoformat()
-            yesterday_str = yesterday.isoformat()
-            today_completed = today_str in streak_days
-            
-            # Calculate current streak
-            check_date = today if today_completed else yesterday
-            current_streak = 0
-            
-            while check_date.isoformat() in streak_days:
-                current_streak += 1
-                check_date -= timedelta(days=1)
-        else:
-            today_completed = False
+        # For best streak, we'll use current streak for now (could be enhanced to track historical best)
+        best_streak = current_streak
         
-        # Calculate best streak (longest consecutive sequence)
-        best_streak = 0
-        if streak_days:
-            current_sequence = 1
-            max_sequence = 1
-            
-            for i in range(1, len(streak_days)):
-                prev_date = datetime.fromisoformat(streak_days[i-1]).date()
-                curr_date = datetime.fromisoformat(streak_days[i]).date()
-                
-                if (curr_date - prev_date).days == 1:
-                    current_sequence += 1
-                    max_sequence = max(max_sequence, current_sequence)
-                else:
-                    current_sequence = 1
-            
-            best_streak = max_sequence
-        
-        # Calculate streak revival count (placeholder - would need streak break tracking)
-        streak_revival_count = 0  # TODO: Implement streak break tracking
-        
-        # Check if reward is earned (every 7 days)
-        reward_earned = current_streak > 0 and current_streak % 7 == 0 and today_completed
-        
-        # TODO: Add coin credit logic when reward_earned is true
-        # TODO: Add caching for performance optimization
+        # Check if milestone reached (every 7 days)
+        milestone_reached = current_streak > 0 and current_streak % 7 == 0 and today_completed
         
         return {
-            "active_days": len(streak_days),
-            "streak_days": streak_days,
             "current_streak": current_streak,
             "best_streak": best_streak,
-            "streak_revival_count": streak_revival_count,
             "today_completed": today_completed,
-            "reward_earned": reward_earned
+            "last_streak_date": last_streak_date,
+            "can_earn_streak_today": can_earn_streak_today,
+            "daily_progress": progress_data,
+            "milestone_reached": milestone_reached
         }
         
     except Exception as e:
@@ -340,4 +294,133 @@ async def update_username(request: UpdateUsernameRequest, user: User = Depends(g
         raise he
     except Exception as e:
         logger.error(f"Error updating username for user {user.id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/daily-progress")
+async def get_daily_progress(user: User = Depends(get_current_user)):
+    """Get user's daily content consumption progress"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Get today's date
+        today = date.today().isoformat()
+        
+        # Count unique content interactions for today (any type of interaction counts)
+        interactions_response = supabase.table("user_interactions").select(
+            "content_id"
+        ).eq("user_id", user.id).gte("created_at", f"{today}T00:00:00").execute()
+        
+        # Count unique content pieces interacted with today
+        unique_content_today = len(set([
+            interaction["content_id"] for interaction in interactions_response.data
+        ])) if interactions_response.data else 0
+        
+        # Check if streak threshold is met (4 unique content pieces)
+        streak_threshold_met = unique_content_today >= 4
+        
+        # Check if user has already been credited for today's streak
+        profile_response = supabase.table("profiles").select(
+            "streak_days, last_streak_date"
+        ).eq("user_id", user.id).single().execute()
+        
+        last_streak_date = profile_response.data.get("last_streak_date") if profile_response.data else None
+        already_credited_today = last_streak_date == today
+        
+        return {
+            "date": today,
+            "unique_content_consumed": unique_content_today,
+            "threshold_required": 4,
+            "threshold_met": streak_threshold_met,
+            "already_credited_today": already_credited_today,
+            "can_earn_streak": streak_threshold_met and not already_credited_today
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching daily progress: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/streak/update")
+async def update_daily_streak(user: User = Depends(get_current_user)):
+    """Update user's streak when they complete daily content goal"""
+    try:
+        supabase = get_supabase_client()
+        today = date.today().isoformat()
+        
+        # First check if user has met the daily threshold
+        progress_data = await get_daily_progress(user)
+        
+        if not progress_data["can_earn_streak"]:
+            if progress_data["already_credited_today"]:
+                return {
+                    "success": False,
+                    "message": "Streak already credited for today",
+                    "streak_days": progress_data.get("current_streak", 0)
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": f"Need to consume {progress_data['threshold_required']} unique content pieces. Current: {progress_data['unique_content_consumed']}",
+                    "streak_days": 0
+                }
+        
+        # Get current profile data
+        profile_response = supabase.table("profiles").select(
+            "streak_days, last_streak_date"
+        ).eq("user_id", user.id).single().execute()
+        
+        if not profile_response.data:
+            raise HTTPException(status_code=404, detail="User profile not found")
+        
+        current_streak = profile_response.data.get("streak_days", 0)
+        last_streak_date = profile_response.data.get("last_streak_date")
+        
+        # Calculate new streak
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        
+        if last_streak_date == yesterday:
+            # Consecutive day - increment streak
+            new_streak = current_streak + 1
+        elif last_streak_date == today:
+            # Already credited today (shouldn't happen due to check above)
+            return {
+                "success": False,
+                "message": "Streak already credited for today",
+                "streak_days": current_streak
+            }
+        else:
+            # Streak broken or first day - start new streak
+            new_streak = 1
+        
+        # Update profile with new streak
+        update_response = supabase.table("profiles").update({
+            "streak_days": new_streak,
+            "last_streak_date": today
+        }).eq("user_id", user.id).execute()
+        
+        if not update_response.data:
+            raise HTTPException(status_code=500, detail="Failed to update streak")
+        
+        logger.info(f"Updated streak for user {user.id}: {current_streak} -> {new_streak}")
+        
+        # Award coins for milestone streaks (every 7 days)
+        coins_earned = 0
+        if new_streak % 7 == 0:
+            coins_earned = 100
+            try:
+                await add_user_coins(CoinOperationRequest(amount=coins_earned, reason=f"7-day streak milestone (day {new_streak})"), user)
+                logger.info(f"Awarded {coins_earned} coins to user {user.id} for {new_streak}-day streak")
+            except Exception as coin_error:
+                logger.error(f"Failed to award streak coins: {coin_error}")
+        
+        return {
+            "success": True,
+            "message": "Streak updated successfully!",
+            "streak_days": new_streak,
+            "previous_streak": current_streak,
+            "coins_earned": coins_earned,
+            "milestone_reached": new_streak % 7 == 0
+        }
+        
+    except Exception as e:
+        logger.error(f"Error updating daily streak: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) 

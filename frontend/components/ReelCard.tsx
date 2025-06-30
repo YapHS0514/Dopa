@@ -61,6 +61,16 @@ export function ReelCard({
   const hasTrackedEngagement = useRef(false);
   const totalWatchTime = useRef(0);
 
+  // Component mounting detection
+  useEffect(() => {
+    mountedRef.current = true;
+    console.log(`🎬 ReelCard ${contentId}: Component mounted/remounted`);
+
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []); // Empty dependency array ensures this runs on every mount
+
   // Enhanced Zustand store with cleanup capabilities
   const {
     shouldBeMuted,
@@ -372,6 +382,15 @@ export function ReelCard({
     // Immediate update without delay to prevent audio glitches
     updateMuteState();
   }, [isMuted, isVisible, isVideoLoaded, contentId, safeVideoOperation]);
+
+  // Simple video loading when component needs it
+  useEffect(() => {
+    if (mountedRef.current && !isVideoLoaded && !isLoading && !hasError) {
+      console.log(`🔄 ReelCard ${contentId}: Loading video`);
+      setIsLoading(true);
+      loadVideo(false);
+    }
+  }, [contentId, isVideoLoaded, isLoading, hasError, loadVideo]); // Trigger when visibility or state changes
 
   // Preload when component mounts (for better scroll performance)
   useEffect(() => {
