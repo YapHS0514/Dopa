@@ -4,7 +4,7 @@ from typing import List, Optional
 class ContentRequest(BaseModel):
     title: str
     summary: str
-    content_type: str = "text"
+    content_type: str = "text"  # "text", "reel", or "carousel"
     topic_id: Optional[str] = None
     tags: List[str] = []
     difficulty_level: int = 1
