@@ -2,9 +2,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from datetime import datetime
+from dotenv import load_dotenv
+load_dotenv()
 
-# Import routers
+
+
 from .routers import content, interactions, topics, saved, recommendations, auth, user, badges
+
 
 # Import middleware
 from .utils.rate_limiter import rate_limit_middleware
@@ -52,7 +56,9 @@ app.include_router(topics.router)
 app.include_router(saved.router)
 app.include_router(recommendations.router)
 app.include_router(user.router)
+app.include_router(tts.router)
 app.include_router(badges.router)
+
 
 @app.get("/")
 async def root():

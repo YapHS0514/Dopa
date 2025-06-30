@@ -8,6 +8,7 @@ import {
   Dimensions,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { router } from 'expo-router';
 import * as Animatable from 'react-native-animatable';
@@ -22,6 +23,7 @@ interface Topic {
   name: string;
   color?: string;
   icon?: string;
+  image_url?: string;
 }
 
 const AGE_GROUPS = [
@@ -30,8 +32,11 @@ const AGE_GROUPS = [
   { id: '18-25', label: '18-25 years' },
 ];
 
+const AGE_ACTIVE_COLOR = '#FF5C00';
+
 const { width } = Dimensions.get('window');
-const TOPIC_ITEM_WIDTH = (width - 48) / 2;
+const TOPIC_ITEM_WIDTH = width - 40;
+const INTEREST_BOX_HEIGHT = 80;
 
 export default function OnboardingScreen() {
   const [step, setStep] = useState(1);
@@ -49,7 +54,8 @@ export default function OnboardingScreen() {
         setLoadingTopics(true);
         const response = (await apiClient.getTopics()) as { data: Topic[] };
         console.log('Fetched topics:', response);
-        setTopics(response.data || []);
+        const topicsData = response.data || [];
+        setTopics(topicsData);
       } catch (error) {
         console.error('Error fetching topics:', error);
         Alert.alert('Error', 'Failed to load topics. Please try again.');
@@ -61,13 +67,18 @@ export default function OnboardingScreen() {
     fetchTopics();
   }, []);
 
-  const handleTopicToggle = useCallback((topicId: string) => {
-    setSelectedTopics((prev) =>
-      prev.includes(topicId)
-        ? prev.filter((id) => id !== topicId)
-        : [...prev, topicId]
-    );
-  }, []);
+  const handleTopicToggle = useCallback(
+    (topicId: string) => {
+      const isSelected = selectedTopics.includes(topicId);
+
+      setSelectedTopics((prev) =>
+        prev.includes(topicId)
+          ? prev.filter((id) => id !== topicId)
+          : [...prev, topicId]
+      );
+    },
+    [selectedTopics]
+  );
 
   const handleNext = useCallback(async () => {
     if (step === 1 && selectedAgeGroup) {
@@ -107,34 +118,40 @@ export default function OnboardingScreen() {
     <View style={[styles.container, { backgroundColor: Colors.background }]}>
       {step === 1 ? (
         <Animatable.View animation="fadeIn" style={styles.stepContainer}>
-          <Text style={[styles.title, { color: Colors.text }]}>
-            What's your age group?
-          </Text>
-          <Text style={[styles.subtitle, { color: Colors.text }]}>
-            We'll customize content for your age group
-          </Text>
-
-          <View style={styles.optionsContainer}>
-            {AGE_GROUPS.map((group) => (
-              <TouchableOpacity
-                key={group.id}
-                style={[
-                  styles.ageOption,
-                  {
-                    backgroundColor:
-                      selectedAgeGroup === group.id
-                        ? Colors.tint
-                        : Colors.background,
-                    borderColor: Colors.border,
-                  },
-                ]}
-                onPress={() => setSelectedAgeGroup(group.id)}
-              >
-                <Text style={[styles.ageOptionText, { color: Colors.text }]}>
-                  {group.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          <View style={styles.centeredContent}>
+            <Text style={[styles.title, { color: Colors.text }]}>
+              What's your age group?
+            </Text>
+            <Text style={[styles.subtitle, { color: Colors.text }]}>
+              We'll customize content for your age group
+            </Text>
+            <View style={styles.optionsContainer}>
+              {AGE_GROUPS.map((group) => (
+                <TouchableOpacity
+                  key={group.id}
+                  style={[
+                    styles.ageOption,
+                    {
+                      backgroundColor:
+                        selectedAgeGroup === group.id
+                          ? AGE_ACTIVE_COLOR
+                          : Colors.background,
+                      borderColor: Colors.border,
+                    },
+                  ]}
+                  onPress={() =>
+                    setSelectedAgeGroup(
+                      selectedAgeGroup === group.id ? null : group.id
+                    )
+                  }
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.ageOptionText, { color: Colors.text }]}>
+                    {group.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         </Animatable.View>
       ) : (
@@ -159,64 +176,108 @@ export default function OnboardingScreen() {
               showsVerticalScrollIndicator={false}
             >
               <View style={styles.topicsGrid}>
-                {topics.map((topic: Topic) => (
-                  <TouchableOpacity
-                    key={topic.id}
-                    style={[
-                      styles.topicItem,
-                      {
-                        backgroundColor: selectedTopics.includes(topic.id)
-                          ? Colors.tint
-                          : Colors.background,
-                        borderColor: Colors.border,
-                      },
-                    ]}
-                    onPress={() => handleTopicToggle(topic.id)}
-                  >
-                    <Text style={styles.topicIcon}>{topic.icon || '🏷️'}</Text>
-                    <Text style={[styles.topicName, { color: Colors.text }]}>
-                      {topic.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {topics.map((topic: Topic, idx) => {
+                  const isSelected = selectedTopics.includes(topic.id);
+
+                  return (
+                    <View key={topic.id} style={styles.topicItemWrapper}>
+                      <TouchableOpacity
+                        style={[
+                          styles.topicItem,
+                          {
+                            backgroundColor: isSelected
+                              ? Colors.tint
+                              : Colors.background,
+                            borderColor: isSelected ? '#FF5C00' : Colors.border,
+                            borderWidth: isSelected ? 2 : 1,
+                          },
+                        ]}
+                        onPress={() => handleTopicToggle(topic.id)}
+                        activeOpacity={0.8}
+                      >
+                        {topic.image_url && (
+                          <Image
+                            source={{ uri: topic.image_url }}
+                            style={styles.topicBackgroundImage}
+                            resizeMode="cover"
+                          />
+                        )}
+                        {topic.image_url && (
+                          <View
+                            style={[
+                              styles.topicOverlay,
+                              {
+                                backgroundColor: isSelected
+                                  ? 'rgba(0, 0, 0, 0.4)'
+                                  : 'rgba(0, 0, 0, 0.35)',
+                              },
+                            ]}
+                          />
+                        )}
+                        <Text
+                          style={[
+                            styles.topicName,
+                            {
+                              color: isSelected ? '#FF5C00' : '#FFFFFF',
+                              textShadowColor: 'rgba(0, 0, 0, 0.75)',
+                              textShadowOffset: { width: 0, height: 1 },
+                              textShadowRadius: 3,
+                            },
+                          ]}
+                        >
+                          {topic.name}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
               </View>
             </ScrollView>
           )}
         </Animatable.View>
       )}
 
-      <TouchableOpacity
-        style={[
-          styles.nextButton,
-          {
-            backgroundColor:
-              (step === 1 && selectedAgeGroup) ||
-              (step === 2 && selectedTopics.length >= 5)
-                ? Colors.tint
-                : Colors.muted,
-          },
-        ]}
-        disabled={
-          (step === 1 && !selectedAgeGroup) ||
-          (step === 2 && selectedTopics.length < 5) ||
-          savingPreferences
-        }
-        onPress={handleNext}
-      >
-        {savingPreferences && step === 2 ? (
-          <>
-            <ActivityIndicator size="small" color={Colors.text} />
-            <Text style={styles.nextButtonText}>Saving...</Text>
-          </>
-        ) : (
-          <>
-            <Text style={styles.nextButtonText}>
-              {step === 1 ? 'Next' : 'Get Started'}
-            </Text>
-            <Feather name="arrow-right" size={20} color={Colors.text} />
-          </>
-        )}
-      </TouchableOpacity>
+      {/* Next button for age group selection */}
+      {step === 1 && selectedAgeGroup && (
+        <TouchableOpacity
+          style={[
+            styles.nextButton,
+            {
+              backgroundColor: AGE_ACTIVE_COLOR,
+            },
+          ]}
+          onPress={handleNext}
+        >
+          <Text style={styles.nextButtonText}>Next</Text>
+          <Feather name="arrow-right" size={20} color={Colors.text} />
+        </TouchableOpacity>
+      )}
+
+      {/* Only render the button if 5 or more topics are selected */}
+      {step === 2 && selectedTopics.length >= 5 && (
+        <TouchableOpacity
+          style={[
+            styles.nextButton,
+            {
+              backgroundColor: AGE_ACTIVE_COLOR,
+            },
+          ]}
+          disabled={savingPreferences}
+          onPress={handleNext}
+        >
+          {savingPreferences ? (
+            <>
+              <ActivityIndicator size="small" color={Colors.text} />
+              <Text style={styles.nextButtonText}>Saving...</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.nextButtonText}>Get Started</Text>
+              <Feather name="arrow-right" size={20} color={Colors.text} />
+            </>
+          )}
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -233,20 +294,28 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontFamily: 'SF-Pro-Display',
     marginBottom: 8,
+    textAlign: 'center',
+    marginTop: 30,
   },
   subtitle: {
     fontSize: 16,
     opacity: 0.8,
     marginBottom: 32,
+    textAlign: 'center',
+    marginTop: 10,
   },
   optionsContainer: {
+    width: '100%',
     gap: 16,
+    marginTop: 16,
   },
   ageOption: {
-    padding: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 40,
     borderRadius: 12,
     borderWidth: 1,
     alignItems: 'center',
+    marginBottom: 12,
   },
   ageOptionText: {
     fontSize: 18,
@@ -256,33 +325,45 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   topicsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+    flexDirection: 'column',
     paddingBottom: 100,
   },
+  topicItemWrapper: {
+    width: '100%',
+    marginBottom: 12,
+  },
   topicItem: {
-    width: TOPIC_ITEM_WIDTH,
-    padding: 16,
+    width: '100%',
+    minHeight: INTEREST_BOX_HEIGHT,
+    height: INTEREST_BOX_HEIGHT,
     borderRadius: 12,
     borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 10,
+    overflow: 'hidden',
+    position: 'relative',
+    padding: 0,
   },
   topicIcon: {
     fontSize: 32,
-    marginBottom: 8,
+    textAlign: 'center',
+    marginBottom: 0, // remove or reduce this
   },
   topicName: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
+    fontSize: 20,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 0,
   },
   topicDescription: {
     fontSize: 12,
     lineHeight: 16,
+    textAlign: 'center',
   },
   nextButton: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 50,
     left: 20,
     right: 20,
     flexDirection: 'row',
@@ -307,5 +388,33 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     opacity: 0.7,
+  },
+  centeredContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  topicBackgroundImage: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 12,
+    zIndex: -1,
+  },
+  topicOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    borderRadius: 12,
+    zIndex: -1,
+  },
+  checkmarkContainer: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: 10,
+    padding: 2,
+  },
+  checkmark: {
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

@@ -22,11 +22,14 @@ import StreakButton from '../../components/StreakButton';
 import { useInfiniteContent, Fact } from '../../hooks/useInfiniteContent';
 import { apiClient } from '../../lib/api';
 import { ReelCard } from '../../components/ReelCard';
+import { useReelAudioStore, useTTSAudioStore } from '../../lib/store';
+import { playCombinedTTS } from '../../lib/ttsUtils';
 import { CarouselCard } from '../../components/CarouselCard';
 import { useReelAudioStore } from '../../lib/store';
 import { useDailyContentTracker } from '../../hooks/useDailyContentTracker';
 import { useStreakData } from '../../hooks/useStreakData';
 // StreakCelebrationModal moved to streaks.tsx
+
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -61,14 +64,6 @@ const getFactCards = (fact: Fact) => {
         sourceUrl: undefined,
       })),
     {
-      key: 'summary',
-      title: 'Summary',
-      body: fact.summary,
-      isSourceCard: false,
-      isHookCard: undefined,
-      sourceUrl: undefined,
-    },
-    {
       key: 'source',
       title: 'Source',
       body: fact.sourceUrl,
@@ -82,10 +77,26 @@ const getFactCards = (fact: Fact) => {
 
 const FactCarousel = ({
   fact,
+  isPlaying,
+  onListen,
+  onLike,
+  onShare,
+  onSave,
+  liked,
+  saved,
+  listenLoading,
   onEngagementTracked,
   contentEngagementTracked,
 }: {
   fact: Fact;
+  isPlaying?: boolean;
+  onListen?: () => void;
+  onLike?: () => void;
+  onShare?: () => void;
+  onSave?: () => void;
+  liked?: boolean;
+  saved?: boolean;
+  listenLoading?: boolean;
   onEngagementTracked?: (
     contentId: string,
     engagementType: string,
@@ -130,7 +141,7 @@ const FactCarousel = ({
                 isSourceCard={item.isSourceCard}
                 isHookCard={item.isHookCard}
                 sourceUrl={item.sourceUrl}
-                tags={item.isHookCard ? fact.tags : undefined} // Show tags only on hook card
+                tags={item.isHookCard ? fact.tags : undefined}
                 onSourcePress={
                   item.isSourceCard && item.sourceUrl
                     ? () => Linking.openURL(item.sourceUrl)
@@ -144,7 +155,7 @@ const FactCarousel = ({
           const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
           setCardIndex(idx);
 
-          // Track engagement based on swipe behavior
+          // Engagement tracking logic from 1-549
           if (idx > 0 && !hasTrackedInterested.current) {
             // User swiped at least once - "INTERESTED"
             console.log(
@@ -167,26 +178,41 @@ const FactCarousel = ({
           }
         }}
       />
-      {/* Action buttons positioned on the right side */}
+      {/* Unified right-hand side buttons */}
       <ActionButtons
-        fact={{ ...fact, contentType: 'text' as const }}
+        fact={fact}
         style={styles.actionButtons}
-        onInteractionTracked={onEngagementTracked}
+        onListen={() => playCombinedTTS(fact.summary)}
       />
     </View>
   );
 };
 
-// New component for Reel content
 const ReelContent = ({
   fact,
   isVisible,
   screenFocused,
+  isPlaying,
+  isMuted,
+  onListen,
+  onLike,
+  onShare,
+  onSave,
+  liked,
+  saved,
   onEngagementTracked,
 }: {
   fact: Fact;
   isVisible: boolean;
   screenFocused: boolean;
+  isPlaying: boolean;
+  isMuted: boolean;
+  onListen: () => void;
+  onLike: () => void;
+  onShare: () => void;
+  onSave: () => void;
+  liked: boolean;
+  saved: boolean;
   onEngagementTracked?: (
     contentId: string,
     engagementType: string,
@@ -205,7 +231,7 @@ const ReelContent = ({
         videoUrl={fact.video_url!}
         title={fact.hook}
         tags={fact.tags}
-        isVisible={isVisible && screenFocused} // Only visible if both conditions are true
+        isVisible={isVisible && screenFocused}
         contentId={fact.id}
         onLoadStart={() => console.log(`Loading reel: ${fact.id}`)}
         onLoad={() => console.log(`Reel loaded: ${fact.id}`)}
@@ -214,12 +240,8 @@ const ReelContent = ({
         }
         onEngagementTracked={onEngagementTracked}
       />
-      {/* Action buttons for reels with correct contentType */}
-      <ActionButtons
-        fact={reelFact}
-        style={styles.reelActionButtons}
-        onInteractionTracked={onEngagementTracked}
-      />
+      {/* Unified right-hand side buttons */}
+      <ActionButtons fact={reelFact} style={styles.actionButtons} />
     </View>
   );
 };
@@ -282,6 +304,7 @@ export default function IndexScreen() {
   // Navigation focus detection
   const isFocused = useIsFocused();
   const { pauseAllVideos } = useReelAudioStore();
+  const { pauseAllAudio: pauseAllTTS, currentlyPlayingId } = useTTSAudioStore();
 
   // Daily content tracking and streak system
   const { progress, initializeDaily, trackContentInteraction } =
@@ -313,12 +336,17 @@ export default function IndexScreen() {
   // Pause all videos when screen loses focus
   useEffect(() => {
     if (!isFocused) {
-      console.log('📱 IndexScreen: Screen lost focus, pausing all videos');
+      console.log(
+        '📱 IndexScreen: Screen lost focus, pausing all videos and TTS'
+      );
       pauseAllVideos();
+      pauseAllTTS();
     } else {
       console.log('📱 IndexScreen: Screen gained focus');
     }
-  }, [isFocused, pauseAllVideos]);
+
+  }, [isFocused, pauseAllVideos, pauseAllTTS]);
+
 
   // Initialize daily content tracking on mount
   useEffect(() => {
@@ -350,7 +378,8 @@ export default function IndexScreen() {
 
   // StreakButton now handles its own data fetching
 
-  // Track content engagement per item
+
+  // Engagement tracking state from 1-549
   const contentEngagementTracked = useRef<Set<string>>(new Set());
 
   // Enhanced track interaction that also marks content as tracked and handles daily streak progress
@@ -420,11 +449,10 @@ export default function IndexScreen() {
         console.log(`Scroll: moved to item ${currentIndex}/${facts.length}`);
       }
 
-      // Handle engagement tracking when leaving content
+      // Engagement tracking for skipped text content (from 1-549)
       if (currentIndex !== factIndex && facts[factIndex]) {
         const previousContent = facts[factIndex];
         const contentType = getContentType(previousContent);
-
         // For text and carousel content, check if user skipped without swiping
         if (
           (contentType === 'text' || contentType === 'carousel') &&
@@ -438,15 +466,21 @@ export default function IndexScreen() {
         }
       }
 
-      // Update current index (engagement tracking is handled by individual components)
-      if (currentIndex !== factIndex) {
-        setFactIndex(currentIndex);
+      // Track view when user switches to a new fact
+      if (currentIndex !== factIndex && facts[currentIndex]) {
+        const currentContentId = facts[currentIndex].id;
+        if (lastTrackedContentId.current !== currentContentId) {
+          setFactIndex(currentIndex);
+          lastTrackedContentId.current = currentContentId;
+          pauseAllTTS();
+          trackInteraction(currentContentId, 'view', 1);
+        }
       }
 
       // More aggressive loading: load when at 2nd item from end OR when at 3rd item
       const shouldLoadMore =
-        (currentIndex >= facts.length - 2 || // Traditional: 2 from end
-          currentIndex >= Math.max(2, facts.length - 3)) && // OR: 3 from end if we have content
+        (currentIndex >= facts.length - 2 ||
+          currentIndex >= Math.max(2, facts.length - 3)) &&
         hasMore &&
         !loading;
 
@@ -455,7 +489,15 @@ export default function IndexScreen() {
         loadMoreContent();
       }
     },
-    [facts, factIndex, loadMoreContent, hasMore, loading, trackInteraction]
+    [
+      facts,
+      factIndex,
+      loadMoreContent,
+      hasMore,
+      loading,
+      trackInteraction,
+      pauseAllTTS,
+    ]
   );
 
   // Separate handler for momentum scroll end (when user stops swiping)
@@ -478,13 +520,24 @@ export default function IndexScreen() {
     ({ item, index }: { item: Fact; index: number }) => {
       const contentType = getContentType(item);
       const isVisible = index === factIndex;
-
+      let isMuted = false;
+      if (contentType === 'reel') {
+        isMuted = useReelAudioStore.getState().isManuallyMuted(item.id);
+      }
       if (contentType === 'reel') {
         return (
           <ReelContent
             fact={item}
             isVisible={isVisible}
             screenFocused={isFocused}
+            isPlaying={isVisible && !isMuted}
+            isMuted={isMuted}
+            onListen={() => {}}
+            onLike={() => {}}
+            onShare={() => {}}
+            onSave={() => {}}
+            liked={false}
+            saved={false}
             onEngagementTracked={trackEngagement}
           />
         );
@@ -500,13 +553,21 @@ export default function IndexScreen() {
         return (
           <FactCarousel
             fact={item}
+            isPlaying={currentlyPlayingId === item.id}
+            onListen={() => {}}
+            onLike={() => {}}
+            onShare={() => {}}
+            onSave={() => {}}
+            liked={false}
+            saved={false}
+            listenLoading={false}
             onEngagementTracked={trackEngagement}
             contentEngagementTracked={contentEngagementTracked}
           />
         );
       }
     },
-    [factIndex, isFocused, trackEngagement]
+    [factIndex, isFocused, currentlyPlayingId, trackEngagement]
   );
 
   const keyExtractor = useCallback((item: Fact) => item.id, []);
@@ -588,12 +649,12 @@ export default function IndexScreen() {
           onScroll={handleScroll}
           onMomentumScrollEnd={handleMomentumScrollEnd}
           scrollEventThrottle={16}
-          removeClippedSubviews={false} // Keep videos in memory for better performance
+          removeClippedSubviews={false}
+          updateCellsBatchingPeriod={100}
+          decelerationRate="fast"
           maxToRenderPerBatch={4} // Increased for better batch handling
           windowSize={7} // Larger window to keep more components mounted and reduce unmount/remount cycles
           initialNumToRender={3} // Start with more items
-          updateCellsBatchingPeriod={100} // Faster updates for better responsiveness
-          decelerationRate="fast" // Better snap-to behavior
           maintainVisibleContentPosition={{
             minIndexForVisible: 0,
             autoscrollToTopThreshold: 10,
@@ -618,8 +679,6 @@ export default function IndexScreen() {
           onEndReachedThreshold={0.3} // Trigger earlier for better UX
         />
       )}
-
-      {/* Loading indicator for infinite scroll */}
       {loading && facts.length > 0 && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="small" color={Colors.tint} />

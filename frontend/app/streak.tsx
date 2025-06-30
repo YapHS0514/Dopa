@@ -491,12 +491,6 @@ export default function StreakScreen() {
                 style={styles.dropdownCol}
               />
             </View>
-            {/* <TouchableOpacity
-              style={styles.dropdownConfirmButton}
-              onPress={confirmSelection}
-            >
-              <Text style={{ color: '#fff', fontSize: 16 }}>Done</Text>
-            </TouchableOpacity> */}
           </Animated.View>
         </TouchableOpacity>
       )}

@@ -7,12 +7,12 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { VolumeX, Volume2 } from 'lucide-react-native';
 import { Colors } from '../constants/Colors';
 import { Audio } from 'expo-av';
 import { apiClient } from '../lib/api';
 import { useSavedContent } from '../contexts/SavedContentContext';
-import { useReelAudioStore } from '../lib/store';
+import { useReelAudioStore, useTTSAudioStore } from '../lib/store';
+import { playCombinedTTS } from '../lib/ttsUtils';
 
 interface ActionButtonsProps {
   fact?: any; // TODO: Replace with proper Fact type from backend
@@ -22,16 +22,24 @@ interface ActionButtonsProps {
     interactionType: string,
     value: number
   ) => void;
+  onListen?: () => void;
 }
 
 export default function ActionButtons({
   fact,
   style,
   onInteractionTracked,
+  onListen,
 }: ActionButtonsProps) {
   const [liked, setLiked] = useState(false);
   const [listening, setListening] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [ttsAudioUri, setTTSAudioUri] = useState<string | null>(null);
+  const [ttsPlaybackObj, setTTSPlaybackObj] = useState<Audio.Sound | null>(
+    null
+  );
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   // Use the saved content context for efficient checking
   const {
@@ -46,7 +54,19 @@ export default function ActionButtons({
     isManuallyMuted,
     toggleMute: toggleReelMute,
     getCurrentlyPlaying,
+    allReelsMuted,
+    toggleAllReelsMute,
   } = useReelAudioStore();
+
+  // Use TTS audio store
+  const {
+    currentlyPlayingId: ttsCurrentlyPlaying,
+    isLoading: ttsLoading,
+    setCurrentlyPlaying: setTTSCurrentlyPlaying,
+    setAudioRef: setTTSAudioRef,
+    setLoading: setTTSLoading,
+    stopCurrentAudio: stopTTSCurrent,
+  } = useTTSAudioStore();
 
   // Get saved status immediately from context - no API calls needed!
   const saved = fact?.id ? isContentSaved(fact.id) : false;
@@ -54,7 +74,23 @@ export default function ActionButtons({
   // Determine content type and audio state
   const isReel = fact?.contentType === 'reel' || fact?.video_url;
   const isCurrentReel = getCurrentlyPlaying() === fact?.id;
-  const reelIsManuallyMuted = fact?.id ? isManuallyMuted(fact.id) : false;
+  const reelIsManuallyMuted = useReelAudioStore(
+    React.useCallback((store) => store.isManuallyMuted(fact?.id), [fact?.id])
+  );
+
+  // TTS state
+  const isCurrentTTS = ttsCurrentlyPlaying === fact?.id;
+  const isListening = isAudioPlaying || listening || isCurrentTTS;
+
+  // Unified Listen button logic for both Reels and Slides
+  let listenPlaying = false;
+  if (isReel) {
+    listenPlaying = isCurrentReel && !allReelsMuted;
+  } else {
+    listenPlaying = isListening;
+  }
+  const listenIcon = listenPlaying ? 'volume-high' : 'volume-medium';
+  const listenColor = isPlaying ? '#FFD700' : '#fff';
 
   const likeAnim = useRef(new Animated.Value(1)).current;
   const listenAnim = useRef(new Animated.Value(1)).current;
@@ -174,42 +210,27 @@ export default function ActionButtons({
   };
 
   const handleListen = async () => {
+    if (isPlaying) return;
     animatePress(listenAnim);
-
-    if (isReel) {
-      // For Any Reel: Allow mute/unmute (not just current)
-      if (fact?.id) {
-        const newMutedState = toggleReelMute(fact.id);
+    setIsPlaying(true);
+    if (onListen) {
+      try {
+        await onListen();
+      } finally {
+        setIsPlaying(false);
       }
+      return;
+    }
+    if (isReel) {
+      toggleAllReelsMute();
+      setIsPlaying(false);
     } else {
-      // For Text/Image content: Handle voiceover
-      if (!listening) {
-        // TODO: Play voiceover using ElevenLabs (not implemented yet)
-        // Placeholder implementation with local audio for now
-        const { status } = await Audio.requestPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert('Permission to use speaker denied.');
-          return;
-        }
-        try {
-          // TODO: Replace with backend-provided audio URL for text-to-speech
-          // Example: const audioUrl = await api.getTextToSpeech(fact.fullContent)
-          const { sound: newSound } = await Audio.Sound.createAsync(
-            require('../assets/sound.mp3') // Placeholder audio
-          );
-          setSound(newSound);
-          await newSound.playAsync();
-          setListening(true);
-        } catch (e) {
-          Alert.alert('Audio error', 'Unable to play sound.');
-        }
-      } else {
-        if (sound) {
-          await sound.stopAsync();
-          await sound.unloadAsync();
-          setSound(null);
-        }
-        setListening(false);
+      try {
+        await playCombinedTTS(fact.summary);
+      } catch (err) {
+        console.error('TTS error:', err);
+      } finally {
+        setIsPlaying(false);
       }
     }
   };
@@ -222,6 +243,14 @@ export default function ActionButtons({
     // Share.share({ message: `Check out this fact: ${shareUrl}` })
     Alert.alert('Share', 'Share functionality coming soon!');
   };
+
+  useEffect(() => {
+    return () => {
+      if (ttsPlaybackObj) {
+        ttsPlaybackObj.unloadAsync();
+      }
+    };
+  }, [ttsPlaybackObj]);
 
   return (
     <View style={[styles.container, style]}>
@@ -237,32 +266,18 @@ export default function ActionButtons({
         </Animated.View>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={handleListen} activeOpacity={0.7}>
+      <TouchableOpacity
+        onPress={handleListen}
+        activeOpacity={0.7}
+        disabled={isPlaying}
+      >
         <Animated.View
           style={[styles.button, { transform: [{ scale: listenAnim }] }]}
         >
-          {isReel ? (
-            // Use Lucide icons for All Reels - show manual mute preference
-            reelIsManuallyMuted ? (
-              <VolumeX
-                size={32}
-                color={isCurrentReel ? '#ff6b6b' : '#ff9999'}
-                strokeWidth={2}
-              />
-            ) : (
-              <Volume2
-                size={32}
-                color={isCurrentReel ? '#00ff88' : '#88ffaa'}
-                strokeWidth={2}
-              />
-            )
+          {ttsLoading ? (
+            <Ionicons name="hourglass-outline" size={32} color={listenColor} />
           ) : (
-            // Use Ionicons for text content
-            <Ionicons
-              name={listening ? 'volume-high' : 'volume-medium'}
-              size={32}
-              color={listening ? 'gold' : Colors.text}
-            />
+            <Ionicons name={listenIcon} size={32} color={listenColor} />
           )}
         </Animated.View>
       </TouchableOpacity>
@@ -293,6 +308,11 @@ export default function ActionButtons({
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
+    // Unified absolute positioning for both Reels and Slides
+    position: 'absolute',
+    right: 15,
+    bottom: 100,
+    zIndex: 10,
   },
   button: {
     marginBottom: 25,

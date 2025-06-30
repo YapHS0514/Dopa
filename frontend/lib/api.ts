@@ -263,7 +263,25 @@ class ApiClient {
   }
 
   async completeOnboarding(): Promise<void> {
-    return this.put('/api/auth/profile/onboarding', {});
+    return this.post('/api/user/onboarding/complete', {});
+  }
+
+  // Text-to-Speech methods
+  async generateTTS(text: string, voiceId?: string): Promise<Blob> {
+    const params = new URLSearchParams({ text });
+    if (voiceId) {
+      params.append('voice_id', voiceId);
+    }
+    
+    const response = await this.axiosInstance.post(`/api/tts/generate?${params}`, null, {
+      responseType: 'blob',
+    });
+    
+    return response.data;
+  }
+
+  async getAvailableVoices(): Promise<any> {
+    return this.get('/api/tts/voices');
   }
 
   // ✅ Streak-related methods  
